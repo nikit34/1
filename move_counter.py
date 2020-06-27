@@ -30,6 +30,10 @@ class Camera(Data):
         }
         return params
 
+    def list_read(self):
+        return list(self.cap.read())
+
+
 class Statistic:
     def __init__(self):
         self.df = pd.DataFrame()
@@ -40,12 +44,18 @@ class Statistic:
         self.obj_crossed = []
         self.obj_total = 0
 
-back_bg = cv2.createBackgroundSubtractorMOG2()
+    def set_index(self):
+        self.df.index.name = "Frames"
 
-ret, frame = cap.read()
-ratio = .5
-image = cv2.resize(frame, (0, 0), None, ratio, ratio)
 
 if __name__ == 'main':
+    back_bg = cv2.createBackgroundSubtractorMOG2()
+    ret, frame = Camera.list_read()
+    ratio = .5
+    image = cv2.resize(frame, (0, 0), None, ratio, ratio)
+
+    while ret:
+        pass
+
 
 

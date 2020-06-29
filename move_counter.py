@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import pandas as pd
-import sys, os
+import os
 
 
 class Data:
@@ -10,7 +10,6 @@ class Data:
 
     def read_file(self) -> str:
         path = os.path.dirname(os.path.abspath(__file__)) + '/data/' + self.env + '/'
-        sys.path.insert(0, path)
         file = open(path + r'buffer.txt', 'r')
         return file.read()
 
@@ -18,7 +17,7 @@ class Data:
 class Camera(Data):
     def __init__(self):
         super().__init__('local')
-        self.cap = cv2.VideoCapture(self.read_file())
+        self.cap = cv2.VideoCapture('data/local/in/' + self.read_file())
 
     def get_param_camera(self):
         params = {
@@ -76,7 +75,6 @@ class Write(Camera):
 
     def get_video(self):
         path = os.path.dirname(__file__) + '/data/' + self.env + '/out/'
-        sys.path.insert(0, path)
         out_video = cv2.VideoWriter(
             path + self.file,
             cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
@@ -91,14 +89,16 @@ if __name__ == "__main__":
     camera = Camera()
     Console(camera).log_input()
     Statistic().set_index()
-    ret, _ = camera.list_read()
+    ret = camera.list_read()[0]
     ratio = .5
-
     video = Write('test0.avi').get_video()
 
     while ret:
         ret, frame = camera.list_read()
-        image = cv2.resize(frame, (0, 0), None, ratio, ratio)
+        try:
+            image = cv2.resize(frame, (0, 0), None, ratio, ratio)
+        except Exception as e:
+            print(str(e))
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         foreground_mask = cv2.createBackgroundSubtractorMOG2().apply(gray)  # создание фона вычитания ч/б изображения
 
@@ -115,8 +115,11 @@ if __name__ == "__main__":
         cv2.imshow("contours", image)
         cv2.moveWindow("contours", 0, 0)
         cv2.imshow("foreground mask", foreground_mask)
-        cv2.moveWindow("foreground mask", 0, image.shape[0])
+        cv2.moveWindow("foreground mask", image.shape[1] + 20, 0)
 
+        k = cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff
+        if k == 27:
+            break
         video.write(image)
 
     camera.stop_record()

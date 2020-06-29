@@ -4,31 +4,24 @@ import pandas as pd
 import os
 
 
-def get_env():
-    return '/local/'
-
-
-def get_video():
-    return 'test0.avi'
-
-
-def get_record():
-    return 'buffer.txt'
-
-
-def get_statistic():
-    return 'test0.csv'
-
-
-def get_root_path():
-    return os.path.dirname(os.path.abspath(__file__)) + '/data'
-
-
-class Camera:
+class Interface:
     def __init__(self):
-        self.root_path = get_root_path()
-        self.env = get_env()
-        self.record = get_record()
+        self.env = '/local/'
+        self.video = 'test0.avi'
+        self.record = 'buffer.txt'
+        self.statistic = 'test0.csv'
+        self.root_path = os.path.dirname(os.path.abspath(__file__)) + '/data'
+
+        self.ratio = .5
+
+        self.morph_rsize = (10, 10)
+        self.thresh_val = 200
+        self.max_val = 255
+
+
+class Camera(Interface):
+    def __init__(self):
+        super().__init__()
         self.cap = cv2.VideoCapture(self.get_full_path_input())
 
     def get_param_camera(self):
@@ -40,7 +33,7 @@ class Camera:
         }
         return params
 
-    def list_read(self):
+    def read(self):
         return list(self.cap.read())
 
     def get_full_path_input(self) -> str:
@@ -84,16 +77,13 @@ class Console(Camera):
         print('****************************************************')
 
 
-class VideoStatistic(Camera):
+class VideoStatistic(Camera, Interface):
     def __init__(self):
-        self.root_path = get_root_path()
-        self.env = get_env()
-        self.name_video = get_video()
         super().__init__()
         self.params = self.get_param_camera()
 
     def set_record(self):
-        path = self.root_path + self.env + 'out/' + self.name_video
+        path = self.root_path + self.env + 'out/' + self.video
         out_video = cv2.VideoWriter(
             path,
             cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
@@ -105,6 +95,7 @@ class VideoStatistic(Camera):
 
 
 if __name__ == "__main__":
+    interface = Interface()
     camera = Camera()
     console = Console()
     file_statistic = FileStatistic()
@@ -112,24 +103,26 @@ if __name__ == "__main__":
 
     console.log_input()
     file_statistic.set_index()
-    ret = camera.list_read()[0]
-    ratio = .5
+
+    foreground_bg = cv2.createBackgroundSubtractorMOG2()
+
+    ret = camera.read()[0]
     video = video_statistic.set_record()
 
     while ret:
-        ret, frame = camera.list_read()
+        ret, frame = camera.read()
         try:
-            image = cv2.resize(frame, (0, 0), None, ratio, ratio)
+            image = cv2.resize(frame, (0, 0), None, interface.ratio, interface.ratio)
         except Exception as e:
             continue
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        foreground_mask = cv2.createBackgroundSubtractorMOG2().apply(gray)  # создание фона вычитания ч/б изображения
+        foreground_mask = foreground_bg.apply(gray)  # создание фона вычитания ч/б изображения
 
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))  # применение морфологического ядра
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, interface.morph_rsize)  # применение морфологического ядра
         closing = cv2.morphologyEx(foreground_mask, cv2.MORPH_CLOSE, kernel)  # удаляем черный шум внутри белых частей
         opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)  # удаляем белый шум снаружи черных частей
         dilation = cv2.dilate(opening, kernel)  # выравниваем границы по внешнему контуру
-        _, arr_bins = cv2.threshold(dilation, 220, 255, cv2.THRESH_BINARY)  # для разделения на 0 и max
+        _, arr_bins = cv2.threshold(dilation, interface.thresh_val, interface.max_val, cv2.THRESH_BINARY)  # div 0 и max
         contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         hull = [cv2.convexHull(c) for c in contours]
@@ -147,6 +140,4 @@ if __name__ == "__main__":
     camera.stop_record()
     cv2.destroyAllWindows()
 
-    file_statistic.df.to_csv(get_root_path() + get_env() + 'out/' + get_statistic(), mode='w+', sep=',')
-
-
+    file_statistic.df.to_csv(interface.root_path + interface.env + 'out/' + interface.statistic, mode='w+', sep=',')

@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import pandas as pd
-import sys
+import sys, os
 
 
 class Data:
@@ -9,16 +9,16 @@ class Data:
         self.env = env
 
     def read_file(self) -> str:
-        path = 'data/' + self.env + '/'
+        path = os.path.dirname(os.path.abspath(__file__)) + '/data/' + self.env + '/'
         sys.path.insert(0, path)
-        file = open(r'buffer.txt', 'r')
+        file = open(path + r'buffer.txt', 'r')
         return file.read()
 
 
 class Camera(Data):
     def __init__(self):
+        super().__init__('local')
         self.cap = cv2.VideoCapture(self.read_file())
-        super(Data).__init__('local')
 
     def get_param_camera(self):
         params = {
@@ -51,50 +51,53 @@ class Statistic:
 
 
 class Console(Camera):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
         self.params = self.get_param_camera()
-        super(Camera).__init__()
 
     def log_input(self):
-        print('******************************************************')
-        print('****************** Параметры видео *******************')
-        print('* Количество кадров:                            ', self.params['frames_count'])
-        print('* FPS:                                          ', self.params['fps'])
-        print('* разрешение:                         ', self.params['width'], ' x, ', self.params['height'], ' px')
-        print('* Продолжительность:                       ', self.params['frames_count'] / self.params['fps'], ' мин.')
-        print('******************************************************')
+        print('****************************************************')
+        print('**************** Параметры видео *******************')
+        print('* Количество кадров:                          ', self.params['frames_count'])
+        print('* FPS:                                        ', self.params['fps'])
+        print('* разрешение:                       ',
+              self.params['width'], ' x, ', self.params['height'], ' px')
+        print('* Продолжительность:                     ',
+              self.params['frames_count'] / (self.params['fps'] + 1), ' мин.')
+        print('****************************************************')
 
 
 class Write(Camera):
     def __init__(self, file, env='local'):
         self.file = file
         self.env = env
+        super().__init__()
         self.params = self.get_param_camera()
-        super(Camera, self).__init__()
 
     def get_video(self):
-        path = 'data/' + self.env + '/'
+        path = os.path.dirname(__file__) + '/data/' + self.env + '/out/'
         sys.path.insert(0, path)
         out_video = cv2.VideoWriter(
             path + self.file,
             cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
-            self.params['fps'],
-            (self.params['height'], self.params['width']),
+            int(self.params['fps']),
+            (int(self.params['height']), int(self.params['width'])),
             True,
         )
         return out_video
 
 
-if __name__ == 'main':
-    Console().log_input()
-    Statistic().set_index()
+if __name__ == "__main__":
     camera = Camera()
-    ret, frame = camera.list_read()
+    Console(camera).log_input()
+    Statistic().set_index()
+    ret, _ = camera.list_read()
     ratio = .5
 
     video = Write('test0.avi').get_video()
 
     while ret:
+        ret, frame = camera.list_read()
         image = cv2.resize(frame, (0, 0), None, ratio, ratio)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         foreground_mask = cv2.createBackgroundSubtractorMOG2().apply(gray)  # создание фона вычитания ч/б изображения

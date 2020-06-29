@@ -12,11 +12,23 @@ class Interface:
         self.statistic = 'test0.csv'
         self.root_path = os.path.dirname(os.path.abspath(__file__)) + '/data'
 
-        self.ratio = .5
+        # resize
+        self.ratio = 0.5
 
-        self.morph_rsize = (10, 10)
-        self.thresh_val = 200
-        self.max_val = 255
+        # getStructuringElement
+        self.shape = cv2.MORPH_ELLIPSE
+        self.ksize = (20, 20)
+        self.anchor = (-1, -1)
+
+        # threshold
+        self.thresh = 200
+        self.maxval = 250
+        self.type = cv2.THRESH_TRIANGLE
+
+        # createBackgroundSubtractorMOG2
+        self.history = 20
+        self.varThreshold = 0
+        self.detectShadows = False
 
 
 class Camera(Interface):
@@ -104,7 +116,11 @@ if __name__ == "__main__":
     console.log_input()
     file_statistic.set_index()
 
-    foreground_bg = cv2.createBackgroundSubtractorMOG2()
+    foreground_bg = cv2.createBackgroundSubtractorMOG2(
+        history=interface.history,
+        varThreshold=interface.varThreshold,
+        detectShadows=interface.detectShadows
+    )  # разделить на два слоя bg и fg
 
     ret = camera.read()[0]
     video = video_statistic.set_record()
@@ -112,17 +128,26 @@ if __name__ == "__main__":
     while ret:
         ret, frame = camera.read()
         try:
-            image = cv2.resize(frame, (0, 0), None, interface.ratio, interface.ratio)
+            image = cv2.resize(src=frame, dsize=(0, 0), dst=None, fx=interface.ratio, fy=interface.ratio)
         except Exception as e:
             continue
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         foreground_mask = foreground_bg.apply(gray)  # создание фона вычитания ч/б изображения
 
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, interface.morph_rsize)  # применение морфологического ядра
+        kernel = cv2.getStructuringElement(
+            shape=interface.shape,
+            ksize=interface.ksize,
+            anchor=interface.anchor
+        )  # применение морфологического ядра
         closing = cv2.morphologyEx(foreground_mask, cv2.MORPH_CLOSE, kernel)  # удаляем черный шум внутри белых частей
         opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)  # удаляем белый шум снаружи черных частей
         dilation = cv2.dilate(opening, kernel)  # выравниваем границы по внешнему контуру
-        _, arr_bins = cv2.threshold(dilation, interface.thresh_val, interface.max_val, cv2.THRESH_BINARY)  # div 0 и max
+        _, arr_bins = cv2.threshold(
+            src=dilation,
+            thresh=interface.thresh,
+            maxval=interface.maxval,
+            type=interface.type
+        )  # разделение по thresh с присвоением 0 или max из всех значений
         contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         hull = [cv2.convexHull(c) for c in contours]
@@ -131,7 +156,7 @@ if __name__ == "__main__":
         cv2.imshow("contours", image)
         cv2.moveWindow("contours", 0, 0)
         cv2.imshow("foreground mask", foreground_mask)
-        cv2.moveWindow("foreground mask", image.shape[1] + 20, 0)
+        cv2.moveWindow("foreground mask", image.shape[1], 0)
 
         if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
             break

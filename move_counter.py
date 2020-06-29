@@ -30,6 +30,22 @@ class Interface:
         self.varThreshold = 0
         self.detectShadows = False
 
+        # LineBounds
+        self.lines = [
+            {
+                'p1': (0, 5),
+                'p2': (100, 5),
+                'rgb': (255, 0, 0),
+                'bond': 3
+            },
+            {
+                'p1': (0, 30),
+                'p2': (100, 30),
+                'rgb': (0, 255, 0),
+                'bond': 3
+            },
+        ]
+
 
 class Camera(Interface):
     def __init__(self):
@@ -106,6 +122,27 @@ class VideoStatistic(Camera, Interface):
         return out_video
 
 
+class LineBounds(Camera, Interface):
+    def __init__(self):
+        super().__init__()
+        self.param = self.get_param_camera()
+        self.create_lines()
+
+    def create_lines(self):
+        for line in self.lines:
+            coord_p1 = (
+                int(self.param['width'] * line['p1'][0] / 100),
+                int(self.param['height'] * line['p1'][1] / 100)
+            )
+            coord_p2 = (
+                int(self.param['width'] * line['p2'][0] / 100),
+                int(self.param['height'] * line['p2'][1] / 100)
+            )
+            rgb = line['rgb']
+            bond = line['bond']
+            cv2.line(image, coord_p1, coord_p2, rgb, bond)
+
+
 if __name__ == "__main__":
     interface = Interface()
     camera = Camera()
@@ -151,7 +188,9 @@ if __name__ == "__main__":
         contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         hull = [cv2.convexHull(c) for c in contours]
-        cv2.drawContours(image, hull, -1, (0, 255, 0), 3)
+        cv2.drawContours(image, hull, -1, (0, 255, 0), 1)
+
+        linies = LineBounds()
 
         cv2.imshow("contours", image)
         cv2.moveWindow("contours", 0, 0)

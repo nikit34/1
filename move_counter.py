@@ -4,20 +4,32 @@ import pandas as pd
 import os
 
 
-class Data:
-    def __init__(self, env='local'):
-        self.env = env
-
-    def read_file(self) -> str:
-        path = os.path.dirname(os.path.abspath(__file__)) + '/data/' + self.env + '/'
-        file = open(path + r'buffer.txt', 'r')
-        return file.read()
+def get_env():
+    return '/local/'
 
 
-class Camera(Data):
+def get_video():
+    return 'test0.avi'
+
+
+def get_record():
+    return 'buffer.txt'
+
+
+def get_statistic():
+    return 'test0.csv'
+
+
+def get_root_path():
+    return os.path.dirname(os.path.abspath(__file__)) + '/data'
+
+
+class Camera:
     def __init__(self):
-        super().__init__('local')
-        self.cap = cv2.VideoCapture('data/local/in/' + self.read_file())
+        self.root_path = get_root_path()
+        self.env = get_env()
+        self.record = get_record()
+        self.cap = cv2.VideoCapture(self.get_full_path_input())
 
     def get_param_camera(self):
         params = {
@@ -31,11 +43,17 @@ class Camera(Data):
     def list_read(self):
         return list(self.cap.read())
 
+    def get_full_path_input(self) -> str:
+        path = self.root_path + self.env
+        file = open(path + self.record, 'r')
+        full_path = path + 'in/' + file.read()
+        return full_path
+
     def stop_record(self):
         self.cap.release()
 
 
-class Statistic:
+class FileStatistic:
     def __init__(self):
         self.df = pd.DataFrame()
         self.frame_number = 0
@@ -46,11 +64,11 @@ class Statistic:
         self.obj_total = 0
 
     def set_index(self):
-        self.df.index.name = "Frames"
+        self.df.index.name = 'Frames'
 
 
 class Console(Camera):
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
         super().__init__()
         self.params = self.get_param_camera()
 
@@ -66,17 +84,18 @@ class Console(Camera):
         print('****************************************************')
 
 
-class Write(Camera):
-    def __init__(self, file, env='local'):
-        self.file = file
-        self.env = env
+class VideoStatistic(Camera):
+    def __init__(self):
+        self.root_path = get_root_path()
+        self.env = get_env()
+        self.name_video = get_video()
         super().__init__()
         self.params = self.get_param_camera()
 
-    def get_video(self):
-        path = os.path.dirname(__file__) + '/data/' + self.env + '/out/'
+    def set_record(self):
+        path = self.root_path + self.env + 'out/' + self.name_video
         out_video = cv2.VideoWriter(
-            path + self.file,
+            path,
             cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
             int(self.params['fps']),
             (int(self.params['height']), int(self.params['width'])),
@@ -87,18 +106,22 @@ class Write(Camera):
 
 if __name__ == "__main__":
     camera = Camera()
-    Console(camera).log_input()
-    Statistic().set_index()
+    console = Console()
+    file_statistic = FileStatistic()
+    video_statistic = VideoStatistic()
+
+    console.log_input()
+    file_statistic.set_index()
     ret = camera.list_read()[0]
     ratio = .5
-    video = Write('test0.avi').get_video()
+    video = video_statistic.set_record()
 
     while ret:
         ret, frame = camera.list_read()
         try:
             image = cv2.resize(frame, (0, 0), None, ratio, ratio)
         except Exception as e:
-            print(str(e))
+            continue
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         foreground_mask = cv2.createBackgroundSubtractorMOG2().apply(gray)  # создание фона вычитания ч/б изображения
 
@@ -117,13 +140,13 @@ if __name__ == "__main__":
         cv2.imshow("foreground mask", foreground_mask)
         cv2.moveWindow("foreground mask", image.shape[1] + 20, 0)
 
-        k = cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff
-        if k == 27:
+        if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
             break
         video.write(image)
 
     camera.stop_record()
     cv2.destroyAllWindows()
 
+    file_statistic.df.to_csv(get_root_path() + get_env() + 'out/' + get_statistic(), mode='w+', sep=',')
 
 

@@ -10,7 +10,7 @@ class Interface:
     def __init__(self, space):
         if space == 'main':
             # createBackgroundSubtractorMOG2
-            self.history = 25
+            self.history = 100
             self.varThreshold = 0
             self.detectShadows = False
 
@@ -23,7 +23,7 @@ class Interface:
             self.anchor = (-1, -1)
 
             # threshold
-            self.thresh = 240
+            self.thresh = 200
             self.maxval = 255
             self.type = cv2.THRESH_TRIANGLE
 
@@ -52,36 +52,36 @@ class Interface:
         if space in ['LineBounds', 'CountCrossLine']:
             self.lines = [
                 {
-                    'id_': 'top',
-                    'p1': (0, 1),
-                    'p2': (100, 1),
+                    'id_': 'top-left',
+                    'p1': (0, 35),
+                    'p2': (35, -30),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
                 },
                 {
-                    'id_': 'bottom',
-                    'p1': (0, 30),
-                    'p2': (100, 30),
+                    'id_': 'bottom-right',
+                    'p1': (25, 100),
+                    'p2': (90, 0),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
                 },
                 {
-                    'id_': 'left',
-                    'p1': (10, 0),
-                    'p2': (10, 100),
+                    'id_': 'bottom-left',
+                    'p1': (0, 35),
+                    'p2': (50, 100),
                     'rgb': (0, 0, 255),
                     'bond': 2,
-                    'cross': 4,
+                    'cross': 2,
                 },
                 {
-                    'id_': 'right',
-                    'p1': (28, 0),
-                    'p2': (28, 100),
+                    'id_': 'top-right',
+                    'p1': (35, -30),
+                    'p2': (100, 100),
                     'rgb': (0, 0, 255),
                     'bond': 2,
-                    'cross': 4,
+                    'cross': 2,
                 },
             ]
 
@@ -180,15 +180,15 @@ class LineBounds(Camera, Interface):
         self.rgb = [(0, 0, 0) for _ in range(self.count_lines)]
         self.bond = [0 for _ in range(self.count_lines)]
 
-    def create_lines(self):
+    def create_lines(self, ratio_line):
         for i, line in enumerate(self.lines):
             self.coord_p1[i] = (
-                int(self.param['width'] * line['p1'][0] / 100),
-                int(self.param['height'] * line['p1'][1] / 100)
+                int(self.param['width'] * line['p1'][0] / 100 * ratio_line),
+                int(self.param['height'] * line['p1'][1] / 100 * ratio_line)
             )
             self.coord_p2[i] = (
-                int(self.param['width'] * line['p2'][0] / 100),
-                int(self.param['height'] * line['p2'][1] / 100)
+                int(self.param['width'] * line['p2'][0] / 100 * ratio_line),
+                int(self.param['height'] * line['p2'][1] / 100 * ratio_line)
             )
             self.rgb[i] = line['rgb']
             self.bond[i] = line['bond']
@@ -286,7 +286,7 @@ if __name__ == "__main__":
     file_statistic.set_index()
     video_statistic.set_record()
 
-    line_bounds.create_lines()
+    line_bounds.create_lines(interface.ratio)
 
     while ret:
         ret, frame = camera.read()

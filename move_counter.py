@@ -57,12 +57,24 @@ class Interface:
                     'rgb': (0, 0, 255),
                     'bond': 3
                 },
+                {
+                    'p1': (30, 0),
+                    'p2': (30, 100),
+                    'rgb': (0, 0, 255),
+                    'bond': 3
+                },
+                {
+                    'p1': (5, 0),
+                    'p2': (5, 100),
+                    'rgb': (0, 0, 255),
+                    'bond': 3
+                },
             ]
 
 
 class Camera(Interface):
     def __init__(self):
-        super().__init__('Camera')
+        super(Camera, self).__init__('Camera')
         self.cap = cv2.VideoCapture(self.get_full_path_input())
 
     def get_param_camera(self):
@@ -79,7 +91,7 @@ class Camera(Interface):
 
     def get_full_path_input(self) -> str:
         path = self.root_path + self.env
-        file = open(path + self.record, 'r')
+        file = open(path + self.record)
         full_path = path + 'in/' + file.read()
         return full_path
 
@@ -89,7 +101,7 @@ class Camera(Interface):
 
 class Console(Camera):
     def __init__(self):
-        super().__init__()
+        super(Console, self).__init__()
         self.params = self.get_param_camera()
 
     def log_input(self):
@@ -97,10 +109,10 @@ class Console(Camera):
         print('**************** Параметры видео *******************')
         print('* Количество кадров:                          ', self.params['frames_count'])
         print('* FPS:                                        ', self.params['fps'])
-        print('* разрешение:                       ',
+        print('* разрешение:                                 ',
               self.params['width'], ' x, ', self.params['height'], ' px')
         print('* Продолжительность:                     ',
-              self.params['frames_count'] / (self.params['fps'] + 1), ' мин.')
+              round((self.params['frames_count'] / (self.params['fps'] + 1)), 1), ' сек.')
         print('****************************************************')
 
 
@@ -113,13 +125,13 @@ class FileStatistic(Interface):
         self.obj_id = []
         self.obj_crossed = []
         self.obj_total = 0
-        super().__init__('FileStatistic')
+        super(FileStatistic, self).__init__('FileStatistic')
 
     def set_index(self):
         self.df.index.name = 'Frames'
 
     def save_data(self):
-        self.df.to_csv(self.root_path + self.env + 'out/' + self.statistic, mode='w+', sep=',')
+        self.df.to_csv(self.root_path + self.env + 'out/' + self.statistic, mode='w+')
 
 
 class VideoStatistic(Camera, Interface):
@@ -175,7 +187,27 @@ class LineBounds(Camera, Interface):
 
 class FilterArea(Interface):
     def __init__(self):
-        super().__init__('FilterArea')
+        super(FilterArea, self).__init__('FilterArea')
+
+    def update(self, current_contours):
+        len_contours = len(current_contours)
+        cxx = np.zeros(len_contours)
+        cyy = np.zeros(len_contours)
+
+        for i in range(len_contours):
+            if hierarchy[0][i][3] == -1:
+                area = cv2.contourArea(current_contours[i])
+                if self.min_area < area < self.max_area:
+                    cnt = current_contours[i]
+                    # считаем момент - центр масс
+                    moment = cv2.moments(array=cnt, binaryImage=True)
+                    # ищем координаты центра
+                    cx = int(moment.m10 / moment.m00)
+                    cy = int(moment.m01 / moment.m00)
+
+                    # считаем пересечения. Цикл - количество переходов каждой линии свопадает с ее значением cross
+                    for i, line in enumerate(self.lines):
+                        if pass
 
 
 if __name__ == "__main__":
@@ -204,8 +236,8 @@ if __name__ == "__main__":
     while ret:
         ret, frame = camera.read()
         try:
-            image = cv2.resize(src=frame, dsize=(0, 0), dst=None, fx=interface.ratio, fy=interface.ratio)
-        except Exception as e:
+            image = cv2.resize(src=frame, dsize=(0, 0), fx=interface.ratio, fy=interface.ratio)
+        except cv2.error as e:
             continue
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         foreground_mask = foreground_bg.apply(gray)  # создание фона вычитания ч/б изображения
@@ -231,7 +263,7 @@ if __name__ == "__main__":
         cv2.drawContours(image, hull, -1, (0, 255, 0), 2)
 
         line_bounds.update_lines(image)
-        # filter_area.update()
+        filter_area.update(contours)
 
         cv2.imshow("contours", image)
         cv2.moveWindow("contours", 0, 0)

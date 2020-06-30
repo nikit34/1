@@ -5,51 +5,64 @@ import os
 
 
 class Interface:
-    def __init__(self):
-        self.env = '/local/'
-        self.video = 'test0.avi'
-        self.record = 'buffer.txt'
-        self.statistic = 'test0.csv'
-        self.root_path = os.path.dirname(os.path.abspath(__file__)) + '/data'
+    def __init__(self, space):
+        if space == 'main':
+            # createBackgroundSubtractorMOG2
+            self.history = 20
+            self.varThreshold = 0
+            self.detectShadows = False
 
-        # resize
-        self.ratio = 0.5
+            # resize
+            self.ratio = 0.5
 
-        # getStructuringElement
-        self.shape = cv2.MORPH_ELLIPSE
-        self.ksize = (20, 20)
-        self.anchor = (-1, -1)
+            # get_structuring_element
+            self.shape = cv2.MORPH_ELLIPSE
+            self.ksize = (20, 20)
+            self.anchor = (-1, -1)
 
-        # threshold
-        self.thresh = 200
-        self.maxval = 250
-        self.type = cv2.THRESH_TRIANGLE
+            # threshold
+            self.thresh = 200
+            self.maxval = 250
+            self.type = cv2.THRESH_TRIANGLE
 
-        # createBackgroundSubtractorMOG2
-        self.history = 20
-        self.varThreshold = 0
-        self.detectShadows = False
+        elif space == 'Camera':
+            self.record = 'buffer.txt'
 
-        # LineBounds
-        self.lines = [
-            {
-                'p1': (0, 5),
-                'p2': (100, 5),
-                'rgb': (255, 0, 0),
-                'bond': 3
-            },
-            {
-                'p1': (0, 30),
-                'p2': (100, 30),
-                'rgb': (0, 255, 0),
-                'bond': 3
-            },
-        ]
+        elif space == 'VideoStatistic':
+            self.name_video = 'test0.avi'
+
+        elif space == 'FileStatistic':
+            self.statistic = 'test0.csv'
+
+        elif space == 'FilterArea':
+            self.min_area = 500
+            self.max_area = 1500
+            self.max_rad = 12
+
+        if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
+            self.env = '/local/'
+            self.root_path = os.path.dirname(os.path.abspath(__file__)) + '/data'
+
+        if space in ['LineBounds', 'FilterArea']:
+            self.lines = [
+                {
+                    'p1': (0, 5),
+                    'p2': (100, 5),
+                    'rgb': (0, 0, 255),
+                    'bond': 3
+                },
+                {
+                    'p1': (0, 30),
+                    'p2': (100, 30),
+                    'rgb': (0, 0, 255),
+                    'bond': 3
+                },
+            ]
 
 
 class Camera(Interface):
     def __init__(self):
-        super().__init__()
+        super().__init__('Camera')
         self.cap = cv2.VideoCapture(self.get_full_path_input())
 
     def get_param_camera(self):
@@ -74,20 +87,6 @@ class Camera(Interface):
         self.cap.release()
 
 
-class FileStatistic:
-    def __init__(self):
-        self.df = pd.DataFrame()
-        self.frame_number = 0
-        self.obj_cross_up = 0
-        self.obj_cross_down = 0
-        self.obj_id = []
-        self.obj_crossed = []
-        self.obj_total = 0
-
-    def set_index(self):
-        self.df.index.name = 'Frames'
-
-
 class Console(Camera):
     def __init__(self):
         super().__init__()
@@ -105,53 +104,88 @@ class Console(Camera):
         print('****************************************************')
 
 
+class FileStatistic(Interface):
+    def __init__(self):
+        self.df = pd.DataFrame()
+        self.frame_number = 0
+        self.obj_cross_up = 0
+        self.obj_cross_down = 0
+        self.obj_id = []
+        self.obj_crossed = []
+        self.obj_total = 0
+        super().__init__('FileStatistic')
+
+    def set_index(self):
+        self.df.index.name = 'Frames'
+
+    def save_data(self):
+        self.df.to_csv(self.root_path + self.env + 'out/' + self.statistic, mode='w+', sep=',')
+
+
 class VideoStatistic(Camera, Interface):
     def __init__(self):
-        super().__init__()
+        Camera.__init__(self)
+        Interface.__init__(self, 'VideoStatistic')
         self.params = self.get_param_camera()
+        self.video = None
 
     def set_record(self):
-        path = self.root_path + self.env + 'out/' + self.video
-        out_video = cv2.VideoWriter(
+        path = self.root_path + self.env + 'out/' + self.name_video
+        self.video = cv2.VideoWriter(
             path,
             cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
             int(self.params['fps']),
             (int(self.params['height']), int(self.params['width'])),
             True,
         )
-        return out_video
+
+    def write_record(self, img):
+        self.video.write(img)
 
 
 class LineBounds(Camera, Interface):
     def __init__(self):
-        super().__init__()
+        Camera.__init__(self)
+        Interface.__init__(self, 'LineBounds')
         self.param = self.get_param_camera()
+        self.count_lines = len(self.lines)
+        self.coord_p1 = [(0, 0) for _ in range(self.count_lines)]
+        self.coord_p2 = [(0, 0) for _ in range(self.count_lines)]
+        self.rgb = [(0, 0, 0) for _ in range(self.count_lines)]
+        self.bond = [0 for _ in range(self.count_lines)]
         self.create_lines()
 
     def create_lines(self):
-        for line in self.lines:
-            coord_p1 = (
+        for i, line in enumerate(self.lines):
+            self.coord_p1[i] = (
                 int(self.param['width'] * line['p1'][0] / 100),
                 int(self.param['height'] * line['p1'][1] / 100)
             )
-            coord_p2 = (
+            self.coord_p2[i] = (
                 int(self.param['width'] * line['p2'][0] / 100),
                 int(self.param['height'] * line['p2'][1] / 100)
             )
-            rgb = line['rgb']
-            bond = line['bond']
-            cv2.line(image, coord_p1, coord_p2, rgb, bond)
+            self.rgb[i] = line['rgb']
+            self.bond[i] = line['bond']
+
+    def update_lines(self, img):
+        for i in range(self.count_lines):
+            cv2.line(img, self.coord_p1[i], self.coord_p2[i], self.rgb[i], self.bond[i])
+
+
+class FilterArea(Interface):
+    def __init__(self):
+        super().__init__('FilterArea')
 
 
 if __name__ == "__main__":
-    interface = Interface()
+    interface = Interface('main')
     camera = Camera()
     console = Console()
     file_statistic = FileStatistic()
     video_statistic = VideoStatistic()
-
-    console.log_input()
-    file_statistic.set_index()
+    line_bounds = LineBounds()
+    filter_area = FilterArea()
 
     foreground_bg = cv2.createBackgroundSubtractorMOG2(
         history=interface.history,
@@ -160,7 +194,12 @@ if __name__ == "__main__":
     )  # разделить на два слоя bg и fg
 
     ret = camera.read()[0]
-    video = video_statistic.set_record()
+
+    console.log_input()
+    file_statistic.set_index()
+    video_statistic.set_record()
+
+    line_bounds.create_lines()
 
     while ret:
         ret, frame = camera.read()
@@ -176,6 +215,7 @@ if __name__ == "__main__":
             ksize=interface.ksize,
             anchor=interface.anchor
         )  # применение морфологического ядра
+
         closing = cv2.morphologyEx(foreground_mask, cv2.MORPH_CLOSE, kernel)  # удаляем черный шум внутри белых частей
         opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)  # удаляем белый шум снаружи черных частей
         dilation = cv2.dilate(opening, kernel)  # выравниваем границы по внешнему контуру
@@ -188,20 +228,21 @@ if __name__ == "__main__":
         contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         hull = [cv2.convexHull(c) for c in contours]
-        cv2.drawContours(image, hull, -1, (0, 255, 0), 1)
+        cv2.drawContours(image, hull, -1, (0, 255, 0), 2)
 
-        linies = LineBounds()
+        line_bounds.update_lines(image)
+        # filter_area.update()
 
         cv2.imshow("contours", image)
         cv2.moveWindow("contours", 0, 0)
         cv2.imshow("foreground mask", foreground_mask)
-        cv2.moveWindow("foreground mask", image.shape[1], 0)
+        cv2.moveWindow("foreground mask", int(image.shape[1] * 1.2), 0)
 
         if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
             break
-        video.write(image)
+        video_statistic.write_record(image)
 
     camera.stop_record()
     cv2.destroyAllWindows()
 
-    file_statistic.df.to_csv(interface.root_path + interface.env + 'out/' + interface.statistic, mode='w+', sep=',')
+    file_statistic.save_data()

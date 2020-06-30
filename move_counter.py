@@ -27,6 +27,10 @@ class Interface:
             self.maxval = 250
             self.type = cv2.THRESH_TRIANGLE
 
+            # count_cross_line
+            self.min_area = 500
+            self.max_area = 2500
+
         elif space == 'Camera':
             self.record = 'buffer.txt'
 
@@ -37,11 +41,9 @@ class Interface:
             self.statistic = 'test0.csv'
 
         elif space == 'CountCrossLine':
-            self.min_area = 500
-            self.max_area = 1500
             self.max_rad = 12
             self.epsilon = 100
-            self.timeout = 0.8
+            self.timeout = 0.5
 
         if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
             self.env = '/local/'
@@ -204,31 +206,23 @@ class CountCrossLine(Interface):
         self.total = 0
         self.last_time = [0. for _ in range(len(self.lines))]
 
-    def filter_cross(self, current_contours):
-        len_contours = len(current_contours)
-        cxx = np.zeros(len_contours)
-        cyy = np.zeros(len_contours)
+    def filter_cross(self, current_contours, min_area, max_area):
+        for cnt in self.filter_area(current_contours, min_area, max_area):
+            moment = cv2.moments(array=cnt, binaryImage=False)
+            cx = int(moment['m10'] / moment['m00'])
+            cy = int(moment['m01'] / moment['m00'])
 
-        for i_contour in range(len_contours):
-            if hierarchy[0][i_contour][3] == -1:
-                area = cv2.contourArea(current_contours[i_contour])
-                if self.min_area < area < self.max_area:
-                    cnt = current_contours[i_contour]
-                    moment = cv2.moments(array=cnt, binaryImage=True)
-                    cx = int(moment['m10'] / moment['m00'])
-                    cy = int(moment['m01'] / moment['m00'])
+            for i_line, line in enumerate(self.lines):
+                if self.timeout < time.time() - self.last_time[i_line]:
+                    if self.dist_point_line((cx, cy), line['p1'], line['p2']) < self.epsilon:
+                        self.count_cross[i_line] += 1
+                        self.last_time[i_line] = time.time()
 
-                    for i_line, line in enumerate(self.lines):
-                        if self.timeout < time.time() - self.last_time[i_line]:
-                            if self.dist_point_line((cx, cy), line['p1'], line['p2']) < self.epsilon:
-                                self.count_cross[i_line] += 1
-                                self.last_time[i_line] = time.time()
-
-                        if self.count_cross[i_line] >= line['cross']:
-                            self.done_cross[i_line] = True
-                            if False not in self.done_cross:
-                                print(11111111111111)  # TODO:
-                                self.update()
+                if self.count_cross[i_line] >= line['cross']:
+                    self.done_cross[i_line] = True
+                    if False not in self.done_cross:
+                        print(11111111111111)  # TODO:
+                        self.update()
 
     def switch_color_line(self, obj_line_bounds):
         for i in range(len(self.lines)):
@@ -243,7 +237,6 @@ class CountCrossLine(Interface):
             else:
                 obj_line_bounds.rgb[i] = (0, 0, 255)
 
-
     @staticmethod
     def dist_point_line(point, line1, line2):
         area_double_triangle = abs(
@@ -253,6 +246,18 @@ class CountCrossLine(Interface):
         )
         dist_line = math.sqrt(pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2))
         return int(area_double_triangle / dist_line)
+
+    @staticmethod
+    def filter_area(current_contours, min_area, max_area):
+        len_contours = len(current_contours)
+        cxx = np.zeros(len_contours)
+        cyy = np.zeros(len_contours)
+
+        for i_contour in range(len_contours):
+            if hierarchy[0][i_contour][3] == -1:
+                area = cv2.contourArea(current_contours[i_contour])
+                if min_area < area < max_area:
+                    yield current_contours[i_contour]
 
     def update(self):
         self.count_cross = [0 for _ in range(len(self.lines))]
@@ -309,11 +314,13 @@ if __name__ == "__main__":
         )  # разделение по thresh с присвоением 0 или max из всех значений
         contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        hull = [cv2.convexHull(c) for c in contours]
+        hull = [cv2.convexHull(c) for c in count_cross_line.filter_area(
+            contours, interface.min_area, interface.max_area
+        )]
         cv2.drawContours(image, hull, -1, (255, 0, 0,), 2)
 
         line_bounds.update_lines(image)
-        count_cross_line.filter_cross(contours)
+        count_cross_line.filter_cross(contours, interface.min_area, interface.max_area)
         count_cross_line.switch_color_line(line_bounds)
 
         cv2.imshow("contours", image)

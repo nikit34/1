@@ -1,8 +1,9 @@
-import math
 import numpy as np
 import cv2
 import pandas as pd
 import os
+import math
+import time
 
 
 class Interface:
@@ -39,7 +40,8 @@ class Interface:
             self.min_area = 500
             self.max_area = 1500
             self.max_rad = 12
-            self.epsilon = 50
+            self.epsilon = 100
+            self.timeout = 0.8
 
         if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
             self.env = '/local/'
@@ -48,31 +50,35 @@ class Interface:
         if space in ['LineBounds', 'CountCrossLine']:
             self.lines = [
                 {
+                    'id_': 'top',
                     'p1': (0, 5),
                     'p2': (100, 5),
                     'rgb': (0, 0, 255),
-                    'bond': 3,
+                    'bond': 2,
                     'cross': 2,
                 },
                 {
+                    'id_': 'bottom',
                     'p1': (0, 30),
                     'p2': (100, 30),
                     'rgb': (0, 0, 255),
-                    'bond': 3,
+                    'bond': 2,
                     'cross': 2,
                 },
                 {
-                    'p1': (5, 0),
-                    'p2': (5, 100),
+                    'id_': 'left',
+                    'p1': (15, 0),
+                    'p2': (15, 100),
                     'rgb': (0, 0, 255),
-                    'bond': 3,
+                    'bond': 2,
                     'cross': 4,
                 },
                 {
-                    'p1': (30, 0),
-                    'p2': (30, 100),
+                    'id_': 'right',
+                    'p1': (26, 0),
+                    'p2': (26, 100),
                     'rgb': (0, 0, 255),
-                    'bond': 3,
+                    'bond': 2,
                     'cross': 4,
                 },
             ]
@@ -171,7 +177,6 @@ class LineBounds(Camera, Interface):
         self.coord_p2 = [(0, 0) for _ in range(self.count_lines)]
         self.rgb = [(0, 0, 0) for _ in range(self.count_lines)]
         self.bond = [0 for _ in range(self.count_lines)]
-        self.create_lines()
 
     def create_lines(self):
         for i, line in enumerate(self.lines):
@@ -197,37 +202,57 @@ class CountCrossLine(Interface):
         self.count_cross = [0 for _ in range(len(self.lines))]
         self.done_cross = [False for _ in range(len(self.lines))]
         self.total = 0
+        self.last_time = [0. for _ in range(len(self.lines))]
 
     def filter_cross(self, current_contours):
         len_contours = len(current_contours)
         cxx = np.zeros(len_contours)
         cyy = np.zeros(len_contours)
 
-        for i in range(len_contours):
-            if hierarchy[0][i][3] == -1:
-                area = cv2.contourArea(current_contours[i])
+        for i_contour in range(len_contours):
+            if hierarchy[0][i_contour][3] == -1:
+                area = cv2.contourArea(current_contours[i_contour])
                 if self.min_area < area < self.max_area:
-                    cnt = current_contours[i]
+                    cnt = current_contours[i_contour]
                     moment = cv2.moments(array=cnt, binaryImage=True)
                     cx = int(moment['m10'] / moment['m00'])
                     cy = int(moment['m01'] / moment['m00'])
 
-                    for i, line in enumerate(self.lines):
-                        if self.dist_point_line((cx, cy), line['p1'], line['p2']) < self.epsilon:
-                            self.done_cross[i] += 1
-                        if self.count_cross[i] >= line['cross']:
-                            self.done_cross[i] = True
+                    for i_line, line in enumerate(self.lines):
+                        if self.timeout < time.time() - self.last_time[i_line]:
+                            if self.dist_point_line((cx, cy), line['p1'], line['p2']) < self.epsilon:
+                                self.count_cross[i_line] += 1
+                                self.last_time[i_line] = time.time()
+
+                        if self.count_cross[i_line] >= line['cross']:
+                            self.done_cross[i_line] = True
                             if False not in self.done_cross:
+                                print(11111111111111)  # TODO:
                                 self.update()
 
-    def dist_point_line(self, point, line1, line2):
-        area_duble_triangle = abs(
+    def switch_color_line(self, obj_line_bounds):
+        for i in range(len(self.lines)):
+            if self.count_cross[i] == 1:
+                obj_line_bounds.rgb[i] = (0, 100, 100)
+            elif self.count_cross[i] == 2:
+                obj_line_bounds.rgb[i] = (0, 200, 200)
+            elif self.count_cross[i] == 3:
+                obj_line_bounds.rgb[i] = (0, 255, 255)
+            elif self.done_cross[i]:
+                obj_line_bounds.rgb[i] = (0, 255, 0)
+            else:
+                obj_line_bounds.rgb[i] = (0, 0, 255)
+
+
+    @staticmethod
+    def dist_point_line(point, line1, line2):
+        area_double_triangle = abs(
             (line2[1] - line1[1]) * point[0] -
             (line2[0] - line1[0]) * point[1] +
             line2[0] * line1[1] - line2[1] * line1[0]
         )
         dist_line = math.sqrt(pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2))
-        return int(area_duble_triangle / dist_line)
+        return int(area_double_triangle / dist_line)
 
     def update(self):
         self.count_cross = [0 for _ in range(len(self.lines))]
@@ -285,10 +310,11 @@ if __name__ == "__main__":
         contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         hull = [cv2.convexHull(c) for c in contours]
-        cv2.drawContours(image, hull, -1, (0, 255, 0), 2)
+        cv2.drawContours(image, hull, -1, (255, 0, 0,), 2)
 
         line_bounds.update_lines(image)
         count_cross_line.filter_cross(contours)
+        count_cross_line.switch_color_line(line_bounds)
 
         cv2.imshow("contours", image)
         cv2.moveWindow("contours", 0, 0)
@@ -297,6 +323,7 @@ if __name__ == "__main__":
 
         if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
             break
+
         video_statistic.write_record(image)
 
     camera.stop_record()

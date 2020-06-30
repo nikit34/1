@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import cv2
 import pandas as pd
@@ -34,40 +35,45 @@ class Interface:
         elif space == 'FileStatistic':
             self.statistic = 'test0.csv'
 
-        elif space == 'FilterArea':
+        elif space == 'CountCrossLine':
             self.min_area = 500
             self.max_area = 1500
             self.max_rad = 12
+            self.epsilon = 50
 
         if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
             self.env = '/local/'
             self.root_path = os.path.dirname(os.path.abspath(__file__)) + '/data'
 
-        if space in ['LineBounds', 'FilterArea']:
+        if space in ['LineBounds', 'CountCrossLine']:
             self.lines = [
                 {
                     'p1': (0, 5),
                     'p2': (100, 5),
                     'rgb': (0, 0, 255),
-                    'bond': 3
+                    'bond': 3,
+                    'cross': 2,
                 },
                 {
                     'p1': (0, 30),
                     'p2': (100, 30),
                     'rgb': (0, 0, 255),
-                    'bond': 3
-                },
-                {
-                    'p1': (30, 0),
-                    'p2': (30, 100),
-                    'rgb': (0, 0, 255),
-                    'bond': 3
+                    'bond': 3,
+                    'cross': 2,
                 },
                 {
                     'p1': (5, 0),
                     'p2': (5, 100),
                     'rgb': (0, 0, 255),
-                    'bond': 3
+                    'bond': 3,
+                    'cross': 4,
+                },
+                {
+                    'p1': (30, 0),
+                    'p2': (30, 100),
+                    'rgb': (0, 0, 255),
+                    'bond': 3,
+                    'cross': 4,
                 },
             ]
 
@@ -185,11 +191,14 @@ class LineBounds(Camera, Interface):
             cv2.line(img, self.coord_p1[i], self.coord_p2[i], self.rgb[i], self.bond[i])
 
 
-class FilterArea(Interface):
+class CountCrossLine(Interface):
     def __init__(self):
-        super(FilterArea, self).__init__('FilterArea')
+        super(CountCrossLine, self).__init__('CountCrossLine')
+        self.count_cross = [0 for _ in range(len(self.lines))]
+        self.done_cross = [False for _ in range(len(self.lines))]
+        self.total = 0
 
-    def update(self, current_contours):
+    def filter_cross(self, current_contours):
         len_contours = len(current_contours)
         cxx = np.zeros(len_contours)
         cyy = np.zeros(len_contours)
@@ -199,15 +208,31 @@ class FilterArea(Interface):
                 area = cv2.contourArea(current_contours[i])
                 if self.min_area < area < self.max_area:
                     cnt = current_contours[i]
-                    # считаем момент - центр масс
                     moment = cv2.moments(array=cnt, binaryImage=True)
-                    # ищем координаты центра
-                    cx = int(moment.m10 / moment.m00)
-                    cy = int(moment.m01 / moment.m00)
+                    cx = int(moment['m10'] / moment['m00'])
+                    cy = int(moment['m01'] / moment['m00'])
 
-                    # считаем пересечения. Цикл - количество переходов каждой линии свопадает с ее значением cross
                     for i, line in enumerate(self.lines):
-                        if pass
+                        if self.dist_point_line((cx, cy), line['p1'], line['p2']) < self.epsilon:
+                            self.done_cross[i] += 1
+                        if self.count_cross[i] >= line['cross']:
+                            self.done_cross[i] = True
+                            if False not in self.done_cross:
+                                self.update()
+
+    def dist_point_line(self, point, line1, line2):
+        area_duble_triangle = abs(
+            (line2[1] - line1[1]) * point[0] -
+            (line2[0] - line1[0]) * point[1] +
+            line2[0] * line1[1] - line2[1] * line1[0]
+        )
+        dist_line = math.sqrt(pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2))
+        return int(area_duble_triangle / dist_line)
+
+    def update(self):
+        self.count_cross = [0 for _ in range(len(self.lines))]
+        self.done_cross = [False for _ in range(len(self.lines))]
+        self.total += 1
 
 
 if __name__ == "__main__":
@@ -217,7 +242,7 @@ if __name__ == "__main__":
     file_statistic = FileStatistic()
     video_statistic = VideoStatistic()
     line_bounds = LineBounds()
-    filter_area = FilterArea()
+    count_cross_line = CountCrossLine()
 
     foreground_bg = cv2.createBackgroundSubtractorMOG2(
         history=interface.history,
@@ -263,7 +288,7 @@ if __name__ == "__main__":
         cv2.drawContours(image, hull, -1, (0, 255, 0), 2)
 
         line_bounds.update_lines(image)
-        filter_area.update(contours)
+        count_cross_line.filter_cross(contours)
 
         cv2.imshow("contours", image)
         cv2.moveWindow("contours", 0, 0)

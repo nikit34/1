@@ -10,7 +10,7 @@ class Interface:
     def __init__(self, space):
         if space == 'main':
             # createBackgroundSubtractorMOG2
-            self.history = 20
+            self.history = 25
             self.varThreshold = 0
             self.detectShadows = False
 
@@ -23,13 +23,13 @@ class Interface:
             self.anchor = (-1, -1)
 
             # threshold
-            self.thresh = 200
-            self.maxval = 250
+            self.thresh = 240
+            self.maxval = 255
             self.type = cv2.THRESH_TRIANGLE
 
             # count_cross_line
-            self.min_area = 500
-            self.max_area = 2500
+            self.min_area = 5000
+            self.max_area = 8000
 
         elif space == 'Camera':
             self.record = 'buffer.txt'
@@ -41,8 +41,8 @@ class Interface:
             self.statistic = 'test0.csv'
 
         elif space == 'CountCrossLine':
-            self.max_rad = 12
-            self.epsilon = 100
+            # self.max_rad = 12
+            self.epsilon = 200
             self.timeout = 0.5
 
         if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
@@ -53,8 +53,8 @@ class Interface:
             self.lines = [
                 {
                     'id_': 'top',
-                    'p1': (0, 5),
-                    'p2': (100, 5),
+                    'p1': (0, 1),
+                    'p2': (100, 1),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
@@ -69,16 +69,16 @@ class Interface:
                 },
                 {
                     'id_': 'left',
-                    'p1': (15, 0),
-                    'p2': (15, 100),
+                    'p1': (10, 0),
+                    'p2': (10, 100),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 4,
                 },
                 {
                     'id_': 'right',
-                    'p1': (26, 0),
-                    'p2': (26, 100),
+                    'p1': (28, 0),
+                    'p2': (28, 100),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 4,
@@ -221,7 +221,7 @@ class CountCrossLine(Interface):
                 if self.count_cross[i_line] >= line['cross']:
                     self.done_cross[i_line] = True
                     if False not in self.done_cross:
-                        print(11111111111111)  # TODO:
+                        print(11111111111111) 
                         self.update()
 
     def switch_color_line(self, obj_line_bounds):
@@ -317,7 +317,7 @@ if __name__ == "__main__":
         hull = [cv2.convexHull(c) for c in count_cross_line.filter_area(
             contours, interface.min_area, interface.max_area
         )]
-        cv2.drawContours(image, hull, -1, (255, 0, 0,), 2)
+        cv2.drawContours(image, hull, -1, (255, 0, 0), 2)
 
         line_bounds.update_lines(image)
         count_cross_line.filter_cross(contours, interface.min_area, interface.max_area)

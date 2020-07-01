@@ -24,7 +24,7 @@ class Interface:
 
             # threshold
             self.thresh = 200
-            self.maxval = 255
+            self.maxval_threshold = 255
             self.type = cv2.THRESH_TRIANGLE
 
             # count_cross_line
@@ -41,7 +41,7 @@ class Interface:
             self.statistic = 'test0.csv'
 
         elif space == 'CountCrossLine':
-            # self.max_rad = 12
+            self.max_rad = 12
             self.epsilon = 200
             self.timeout = 0.5
 
@@ -198,6 +198,13 @@ class LineBounds(Camera, Interface):
             cv2.line(img, self.coord_p1[i], self.coord_p2[i], self.rgb[i], self.bond[i])
 
 
+def follow_rectangle(img, cx_, cy_, cnt_):
+    x, y, w, h = cv2.boundingRect(cnt_)
+    cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+    cv2.putText(img, str(cx_) + ', ' + str(cy_), (cx_ + 10, cy_ + 10), cv2.FONT_HERSHEY_SIMPLEX, .3, (0, 0, 255), 1)
+    cv2.drawMarker(img, (cx_, cy_), (0, 0, 255), cv2.MARKER_STAR, markerSize=5, thickness=1, line_type=cv2.LINE_AA)
+
+
 class CountCrossLine(Interface):
     def __init__(self):
         super(CountCrossLine, self).__init__('CountCrossLine')
@@ -205,24 +212,20 @@ class CountCrossLine(Interface):
         self.done_cross = [False for _ in range(len(self.lines))]
         self.total = 0
         self.last_time = [0. for _ in range(len(self.lines))]
+        self.cxx = []
+        self.cyy = []
 
-    def filter_cross(self, current_contours, min_area, max_area):
-        for cnt in self.filter_area(current_contours, min_area, max_area):
-            moment = cv2.moments(array=cnt, binaryImage=False)
-            cx = int(moment['m10'] / moment['m00'])
-            cy = int(moment['m01'] / moment['m00'])
+    def filter_cross(self, cx_, cy_):
+        for i_line, line in enumerate(self.lines):
+            if self.timeout < time.time() - self.last_time[i_line]:
+                if self.dist_point_line((cx_, cy_), line['p1'], line['p2']) < self.epsilon:
+                    self.count_cross[i_line] += 1
+                    self.last_time[i_line] = time.time()
 
-            for i_line, line in enumerate(self.lines):
-                if self.timeout < time.time() - self.last_time[i_line]:
-                    if self.dist_point_line((cx, cy), line['p1'], line['p2']) < self.epsilon:
-                        self.count_cross[i_line] += 1
-                        self.last_time[i_line] = time.time()
-
-                if self.count_cross[i_line] >= line['cross']:
-                    self.done_cross[i_line] = True
-                    if False not in self.done_cross:
-                        print(11111111111111) 
-                        self.update()
+            if self.count_cross[i_line] >= line['cross']:
+                self.done_cross[i_line] = True
+                if False not in self.done_cross:
+                    self.update()
 
     def switch_color_line(self, obj_line_bounds):
         for i in range(len(self.lines)):
@@ -247,22 +250,26 @@ class CountCrossLine(Interface):
         dist_line = math.sqrt(pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2))
         return int(area_double_triangle / dist_line)
 
-    @staticmethod
-    def filter_area(current_contours, min_area, max_area):
-        len_contours = len(current_contours)
-        cxx = np.zeros(len_contours)
-        cyy = np.zeros(len_contours)
-
-        for i_contour in range(len_contours):
-            if hierarchy[0][i_contour][3] == -1:
-                area = cv2.contourArea(current_contours[i_contour])
-                if min_area < area < max_area:
-                    yield current_contours[i_contour]
-
     def update(self):
         self.count_cross = [0 for _ in range(len(self.lines))]
         self.done_cross = [False for _ in range(len(self.lines))]
         self.total += 1
+
+
+def filter_area(current_contours, min_area, max_area):
+    for i_contour in range(len(current_contours)):
+        if hierarchy[0][i_contour][3] == -1:
+            area = cv2.contourArea(current_contours[i_contour])
+            if min_area < area < max_area:
+                yield current_contours[i_contour]
+
+
+def get_center_moment(current_contours, min_area, max_area):
+    for cnt_ in filter_area(current_contours, min_area, max_area):
+        moment = cv2.moments(array=cnt_, binaryImage=False)
+        cx_ = int(moment['m10'] / moment['m00'])
+        cy_ = int(moment['m01'] / moment['m00'])
+        yield cx_, cy_, cnt_
 
 
 if __name__ == "__main__":
@@ -309,20 +316,34 @@ if __name__ == "__main__":
         _, arr_bins = cv2.threshold(
             src=dilation,
             thresh=interface.thresh,
-            maxval=interface.maxval,
+            maxval=interface.maxval_threshold,
             type=interface.type
         )  # разделение по thresh с присвоением 0 или max из всех значений
         contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        hull = [cv2.convexHull(c) for c in count_cross_line.filter_area(
+        hull = [cv2.convexHull(c) for c in filter_area(
             contours, interface.min_area, interface.max_area
         )]
         cv2.drawContours(image, hull, -1, (255, 0, 0), 2)
 
         line_bounds.update_lines(image)
-        count_cross_line.filter_cross(contours, interface.min_area, interface.max_area)
-        count_cross_line.switch_color_line(line_bounds)
 
+        cxx = np.zeros(len(contours))  # TODO: distribute
+        cyy = np.zeros(len(contours))
+        for i, cx, cy, cnt in enumerate(get_center_moment(contours, interface.min_area, interface.max_area)):
+            count_cross_line.filter_cross(cx, cy)
+            follow_rectangle(image, cx, cy, cnt)
+            cxx[i] = cx  # TODO: distribute all what bottom
+            cyy[i] = cy
+        count_cross_line.switch_color_line(line_bounds)
+        cxx = [i for i in cxx if i != 0]
+        cyy = [i for i in cyy if i != 0]
+        add_x_i = []
+        add_y_i = []
+
+        if
+
+        # TODO: to this place
         cv2.imshow("contours", image)
         cv2.moveWindow("contours", 0, 0)
         cv2.imshow("foreground mask", foreground_mask)

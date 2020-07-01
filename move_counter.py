@@ -31,6 +31,9 @@ class Interface:
             self.min_area = 5000
             self.max_area = 8000
 
+            # if old_center
+            self.max_rad = 0.5
+
         elif space == 'Camera':
             self.record = 'buffer.txt'
 
@@ -41,7 +44,6 @@ class Interface:
             self.statistic = 'test0.csv'
 
         elif space == 'CountCrossLine':
-            self.max_rad = 12
             self.epsilon = 200
             self.timeout = 0.5
 
@@ -333,8 +335,8 @@ if __name__ == "__main__":
                 cxx[i] = cx  # TODO: distribute all what bottom
                 cyy[i] = cy
             count_cross_line.switch_color_line(line_bounds)
-            cxx = [i for i in cxx if i != 0]
-            cyy = [i for i in cyy if i != 0]
+            cxx = cxx[cxx != 0]
+            cyy = cyy[cyy != 0]
             add_min_x_i = []
             add_min_y_i = []
             current_cx_cy = []
@@ -351,9 +353,8 @@ if __name__ == "__main__":
                 else:
                     dx = np.zeros((len(cxx), len(file_statistic.obj_id)))
                     dy = np.zeros((len(cyy), len(file_statistic.obj_id)))
-                    for i in range(len(cxx)):  # строки
-                        for j in range(len(file_statistic.obj_id)):  # колонки
-                            # df - матрица значений прошлых cx cy
+                    for i in range(len(cxx)):
+                        for j in range(len(file_statistic.obj_id)):
                             old_cx_cy = file_statistic.df \
                                 .iloc[int(file_statistic.frame_number - 1)][str(file_statistic.obj_id[j])]
                             current_cx_cy = np.array([cxx[i], cyy[i]])
@@ -363,10 +364,10 @@ if __name__ == "__main__":
                                 dx[i, j] = old_cx_cy[0] - current_cx_cy[0]
                                 dy[i, j] = old_cx_cy[1] - current_cx_cy[1]
 
-                    for j in range(len(file_statistic.obj_id)):  # колонки
-                        sum_dx_dy = np.abs(dx[:, j]) + np.abs(dy[:, j])  # вектор-столбец
+                    for j in range(len(file_statistic.obj_id)):
+                        sum_dx_dy = np.abs(dx[:, j]) + np.abs(dy[:, j])
 
-                        min_sum_i = np.argmin(np.abs(sum_dx_dy))  # миним. строка
+                        min_sum_i = np.argmin(np.abs(sum_dx_dy))
                         min_dx = dx[min_sum_i, j]
                         min_dy = dy[min_sum_i, j]
 
@@ -376,9 +377,9 @@ if __name__ == "__main__":
                             if np.abs(min_dx) < interface.max_rad and np.abs(min_dy) < interface.max_rad:
                                 file_statistic.df \
                                     .at[int(file_statistic.frame_number),
-                                        str(file_statistic.obj_id[j])] = [cxx[min_dx], cyy[min_dy]]
-                                add_min_x_i.append(min_dx)
-                                add_min_y_i.append(min_dy)
+                                        str(file_statistic.obj_id[j])] = [cxx[min_sum_i], cyy[min_sum_i]]
+                                add_min_x_i.append(min_sum_i)
+                                add_min_y_i.append(min_sum_i)
 
                     for i in range(len(cxx)):
                         if (i not in add_min_x_i and add_min_y_i) or \
@@ -399,9 +400,9 @@ if __name__ == "__main__":
                     current_objects_index.append(i)
             for i in range(current_objects):
                 current_center = file_statistic.df \
-                    .iloc[int(file_statistic.frame_number)][str(file_statistic.obj_id[current_objects_index[i]])][:-1]
+                    .iloc[int(file_statistic.frame_number)][str(file_statistic.obj_id[current_objects_index[i]])]
                 old_center = file_statistic.df \
-                    .iloc[int(file_statistic.frame_number-1)][str(file_statistic.obj_id[current_objects_index[i]])][:-1]
+                    .iloc[int(file_statistic.frame_number-1)][str(file_statistic.obj_id[current_objects_index[i]])]
                 if current_center:
                     cv2.putText(
                         image,
@@ -452,7 +453,13 @@ if __name__ == "__main__":
             if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
                 break
 
+            try:
+                frame = cv2.resize(src=image, dsize=(0, 0), fx=(1 / interface.ratio), fy=(1 / interface.ratio))
+            except cv2.error as e:
+                continue
+
             video_statistic.write_record(frame)
+
         else:
             break
 

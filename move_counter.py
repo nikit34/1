@@ -216,7 +216,7 @@ class CountCrossLine(Interface):
     def filter_cross(self, cx_, cy_):
         for i_line, line in enumerate(self.lines):
             if self.timeout < time.time() - self.last_time[i_line]:
-                if self.dist_point_line((cx_, cy_), line['p1'], line['p2']) < self.epsilon:
+                if dist_point_line((cx_, cy_), line['p1'], line['p2']) < self.epsilon:
                     self.count_cross[i_line] += 1
                     self.last_time[i_line] = time.time()
 
@@ -238,16 +238,6 @@ class CountCrossLine(Interface):
             else:
                 obj_line_bounds.rgb[i_] = (0, 0, 255)
 
-    @staticmethod
-    def dist_point_line(point, line1, line2):
-        area_double_triangle = abs(
-            (line2[1] - line1[1]) * point[0] -
-            (line2[0] - line1[0]) * point[1] +
-            line2[0] * line1[1] - line2[1] * line1[0]
-        )
-        dist_line = math.sqrt(pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2))
-        return int(area_double_triangle / dist_line)
-
     def update(self):
         self.count_cross = [0 for _ in range(len(self.lines))]
         self.done_cross = [False for _ in range(len(self.lines))]
@@ -268,6 +258,16 @@ def get_center_moment(current_contours, min_area, max_area):
         cx_ = int(moment['m10'] / moment['m00'])
         cy_ = int(moment['m01'] / moment['m00'])
         yield cx_, cy_, cnt_
+
+
+def dist_point_line(point, line1, line2):
+    area_double_triangle = abs(
+        (line2[1] - line1[1]) * point[0] -
+        (line2[0] - line1[0]) * point[1] +
+        line2[0] * line1[1] - line2[1] * line1[0]
+    )
+    dist_line = math.sqrt(pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2))
+    return int(area_double_triangle / dist_line)
 
 
 if __name__ == "__main__":
@@ -307,7 +307,7 @@ if __name__ == "__main__":
                 anchor=interface.anchor
             )  # применение морфологического ядра
 
-            closing = cv2.morphologyEx(foreground_mask, cv2.MORPH_CLOSE, kernel)  # удаляем черный шум внутри белых частей
+            closing = cv2.morphologyEx(foreground_mask, cv2.MORPH_CLOSE, kernel)  # удаляем черный шум у белых частей
             opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)  # удаляем белый шум снаружи черных частей
             dilation = cv2.dilate(opening, kernel)  # выравниваем границы по внешнему контуру
             _, arr_bins = cv2.threshold(
@@ -335,22 +335,25 @@ if __name__ == "__main__":
             count_cross_line.switch_color_line(line_bounds)
             cxx = [i for i in cxx if i != 0]
             cyy = [i for i in cyy if i != 0]
-            add_x_i = []
-            add_y_i = []
+            add_min_x_i = []
+            add_min_y_i = []
+            current_cx_cy = []
+            old_cx_cy = []
 
             if len(cxx):
                 if not file_statistic.obj_id:
                     for i in range(len(cxx)):
                         file_statistic.obj_id.append(i)
                         file_statistic.df[str(file_statistic.obj_id[i])] = ''
-                        file_statistic.df.at[
-                            int(file_statistic.frame_number), str(file_statistic.obj_id[i])] = [cxx[i], cyy[i]]
+                        file_statistic.df \
+                            .at[int(file_statistic.frame_number), str(file_statistic.obj_id[i])] = [cxx[i], cyy[i]]
                         file_statistic.obj_total = file_statistic.obj_id[i] + 1
                 else:
                     dx = np.zeros((len(cxx), len(file_statistic.obj_id)))
                     dy = np.zeros((len(cyy), len(file_statistic.obj_id)))
-                    for i in range(len(cxx)):
-                        for j in range(len(file_statistic.obj_id)):
+                    for i in range(len(cxx)):  # строки
+                        for j in range(len(file_statistic.obj_id)):  # колонки
+                            # df - матрица значений прошлых cx cy
                             old_cx_cy = file_statistic.df \
                                 .iloc[int(file_statistic.frame_number - 1)][str(file_statistic.obj_id[j])]
                             current_cx_cy = np.array([cxx[i], cyy[i]])
@@ -360,14 +363,91 @@ if __name__ == "__main__":
                                 dx[i, j] = old_cx_cy[0] - current_cx_cy[0]
                                 dy[i, j] = old_cx_cy[1] - current_cx_cy[1]
 
-                    for j in range(len(file_statistic.obj_id)):
-                        sum_dx_dy = np.abs(dx[:, j]) + np.abs(dy[:, j])
+                    for j in range(len(file_statistic.obj_id)):  # колонки
+                        sum_dx_dy = np.abs(dx[:, j]) + np.abs(dy[:, j])  # вектор-столбец
+
+                        min_sum_i = np.argmin(np.abs(sum_dx_dy))  # миним. строка
+                        min_dx = dx[min_sum_i, j]
+                        min_dy = dy[min_sum_i, j]
+
+                        if min_dx == 0 and min_dy == 0 and np.all(dx[:, j] == 0) and np.all(dy[:, j] == 0):
+                            continue
+                        else:
+                            if np.abs(min_dx) < interface.max_rad and np.abs(min_dy) < interface.max_rad:
+                                file_statistic.df \
+                                    .at[int(file_statistic.frame_number),
+                                        str(file_statistic.obj_id[j])] = [cxx[min_dx], cyy[min_dy]]
+                                add_min_x_i.append(min_dx)
+                                add_min_y_i.append(min_dy)
+
+                    for i in range(len(cxx)):
+                        if (i not in add_min_x_i and add_min_y_i) or \
+                                (current_cx_cy[0] and not old_cx_cy and not add_min_x_i and not add_min_y_i):
+                            file_statistic.df[str(file_statistic.obj_total)] = ''
+                            file_statistic.obj_id.append(file_statistic.obj_total)
+                            file_statistic.df \
+                                .at[int(file_statistic.frame_number),
+                                    str(file_statistic.obj_total)] = [cxx[i], cyy[i]]
+                            file_statistic.obj_total += 1
+
+            current_objects = 0
+            current_objects_index = []
+
+            for i in range(len(file_statistic.obj_id)):
+                if file_statistic.df.at[int(file_statistic.frame_number), str(file_statistic.obj_id[i])] != '':
+                    current_objects += 1
+                    current_objects_index.append(i)
+            for i in range(current_objects):
+                current_center = file_statistic.df \
+                    .iloc[int(file_statistic.frame_number)][str(file_statistic.obj_id[current_objects_index[i]])][:-1]
+                old_center = file_statistic.df \
+                    .iloc[int(file_statistic.frame_number-1)][str(file_statistic.obj_id[current_objects_index[i]])][:-1]
+                if current_center:
+                    cv2.putText(
+                        image,
+                        'C*d: ' + str(current_center[0]) + ', ' + str(current_center[1]),
+                        (int(current_center[0]), int(current_center[1])),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        .5,
+                        (0, 255, 255),
+                        1
+                    )
+                    cv2.putText(
+                        image,
+                        'ID: ' + str(file_statistic.obj_id[current_objects_index[i]]),
+                        (int(current_center[0]), int(current_center[1] - 15)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        .5,
+                        (0, 255, 255),
+                        1
+                    )
+                    cv2.drawMarker(
+                        image,
+                        (int(current_center[0]), int(current_center[1])),
+                        (0, 0, 255),
+                        cv2.MARKER_STAR,
+                        markerSize=5,
+                        thickness=1,
+                        line_type=cv2.LINE_AA
+                    )
+                    if old_center:
+                        x_start = old_center[0] - interface.max_rad
+                        y_start = old_center[1] - interface.max_rad
+                        x_width = old_center[0] + interface.max_rad
+                        y_height = old_center[1] + interface.max_rad
+                        cv2.rectangle(
+                            image,
+                            (int(x_start), int(y_start)),
+                            (int(x_width), int(y_height)),
+                            (0, 125, 0),
+                            1
+                        )
 
             # TODO: to this place
-            cv2.imshow("contours", image)
-            cv2.moveWindow("contours", 0, 0)
-            cv2.imshow("foreground mask", foreground_mask)
-            cv2.moveWindow("foreground mask", int(image.shape[1] * 1.2), 0)
+            cv2.imshow('contours', image)
+            cv2.moveWindow('contours', 0, 0)
+            cv2.imshow('foreground mask', foreground_mask)
+            cv2.moveWindow('foreground mask', int(image.shape[1] * 1.2), 0)
 
             if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
                 break

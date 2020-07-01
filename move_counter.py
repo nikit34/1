@@ -101,7 +101,7 @@ class Camera(Interface):
         return params
 
     def read(self):
-        return list(self.cap.read())
+        return self.cap.read()
 
     def get_full_path_input(self) -> str:
         path = self.root_path + self.env
@@ -113,10 +113,10 @@ class Camera(Interface):
         self.cap.release()
 
 
-class Console(Camera):
-    def __init__(self):
+class Console:
+    def __init__(self, cam):
         super(Console, self).__init__()
-        self.params = self.get_param_camera()
+        self.params = cam.get_param_camera()
 
     def log_input(self):
         print('****************************************************')
@@ -148,32 +148,32 @@ class FileStatistic(Interface):
         self.df.to_csv(self.root_path + self.env + 'out/' + self.statistic, mode='w+')
 
 
-class VideoStatistic(Camera, Interface):
-    def __init__(self):
-        Camera.__init__(self)
+class VideoStatistic(Interface):
+    def __init__(self, cam):
         Interface.__init__(self, 'VideoStatistic')
-        self.params = self.get_param_camera()
+        self.params = cam.get_param_camera()
         self.video = None
 
     def set_record(self):
         path = self.root_path + self.env + 'out/' + self.name_video
         self.video = cv2.VideoWriter(
             path,
-            cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
+            cv2.VideoWriter_fourcc(*'XVID'),
             int(self.params['fps']),
-            (int(self.params['height']), int(self.params['width'])),
-            True,
+            (int(self.params['width']), int(self.params['height']))
         )
 
     def write_record(self, img):
         self.video.write(img)
 
+    def stop_record(self):
+        self.video.release()
 
-class LineBounds(Camera, Interface):
-    def __init__(self):
-        Camera.__init__(self)
+
+class LineBounds(Interface):
+    def __init__(self, cam):
         Interface.__init__(self, 'LineBounds')
-        self.param = self.get_param_camera()
+        self.param = cam.get_param_camera()
         self.count_lines = len(self.lines)
         self.coord_p1 = [(0, 0) for _ in range(self.count_lines)]
         self.coord_p2 = [(0, 0) for _ in range(self.count_lines)]
@@ -273,10 +273,10 @@ def get_center_moment(current_contours, min_area, max_area):
 if __name__ == "__main__":
     interface = Interface('main')
     camera = Camera()
-    console = Console()
+    console = Console(camera)
     file_statistic = FileStatistic()
-    video_statistic = VideoStatistic()
-    line_bounds = LineBounds()
+    video_statistic = VideoStatistic(camera)
+    line_bounds = LineBounds(camera)
     count_cross_line = CountCrossLine()
 
     foreground_bg = cv2.createBackgroundSubtractorMOG2(
@@ -285,75 +285,99 @@ if __name__ == "__main__":
         detectShadows=interface.detectShadows
     )  # разделить на два слоя bg и fg
 
-    ret = camera.read()[0]
-
     console.log_input()
     file_statistic.set_index()
     video_statistic.set_record()
 
     line_bounds.create_lines(interface.ratio)
 
-    while ret:
+    while camera.cap.isOpened():
         ret, frame = camera.read()
-        try:
-            image = cv2.resize(src=frame, dsize=(0, 0), fx=interface.ratio, fy=interface.ratio)
-        except cv2.error as e:
-            continue
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        foreground_mask = foreground_bg.apply(gray)  # создание фона вычитания ч/б изображения
+        if ret:
+            try:
+                image = cv2.resize(src=frame, dsize=(0, 0), fx=interface.ratio, fy=interface.ratio)
+            except cv2.error as e:
+                continue
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            foreground_mask = foreground_bg.apply(gray)  # создание фона вычитания ч/б изображения
 
-        kernel = cv2.getStructuringElement(
-            shape=interface.shape,
-            ksize=interface.ksize,
-            anchor=interface.anchor
-        )  # применение морфологического ядра
+            kernel = cv2.getStructuringElement(
+                shape=interface.shape,
+                ksize=interface.ksize,
+                anchor=interface.anchor
+            )  # применение морфологического ядра
 
-        closing = cv2.morphologyEx(foreground_mask, cv2.MORPH_CLOSE, kernel)  # удаляем черный шум внутри белых частей
-        opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)  # удаляем белый шум снаружи черных частей
-        dilation = cv2.dilate(opening, kernel)  # выравниваем границы по внешнему контуру
-        _, arr_bins = cv2.threshold(
-            src=dilation,
-            thresh=interface.thresh,
-            maxval=interface.maxval_threshold,
-            type=interface.type
-        )  # разделение по thresh с присвоением 0 или max из всех значений
-        contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            closing = cv2.morphologyEx(foreground_mask, cv2.MORPH_CLOSE, kernel)  # удаляем черный шум внутри белых частей
+            opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)  # удаляем белый шум снаружи черных частей
+            dilation = cv2.dilate(opening, kernel)  # выравниваем границы по внешнему контуру
+            _, arr_bins = cv2.threshold(
+                src=dilation,
+                thresh=interface.thresh,
+                maxval=interface.maxval_threshold,
+                type=interface.type
+            )  # разделение по thresh с присвоением 0 или max из всех значений
+            contours, hierarchy = cv2.findContours(arr_bins, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        hull = [cv2.convexHull(c) for c in filter_area(
-            contours, interface.min_area, interface.max_area
-        )]
-        cv2.drawContours(image, hull, -1, (255, 0, 0), 2)
+            hull = [cv2.convexHull(c) for c in filter_area(
+                contours, interface.min_area, interface.max_area
+            )]
+            cv2.drawContours(image, hull, -1, (200, 0, 0), 1)
 
-        line_bounds.update_lines(image)
+            line_bounds.update_lines(image)
 
-        cxx = np.zeros(len(contours))  # TODO: distribute
-        cyy = np.zeros(len(contours))
-        for i, (cx, cy, cnt) in enumerate(get_center_moment(contours, interface.min_area, interface.max_area)):
-            count_cross_line.filter_cross(cx, cy)
-            follow_rectangle(image, cx, cy, cnt)
-            cxx[i] = cx  # TODO: distribute all what bottom
-            cyy[i] = cy
-        count_cross_line.switch_color_line(line_bounds)
-        cxx = [i for i in cxx if i != 0]
-        cyy = [i for i in cyy if i != 0]
-        add_x_i = []
-        add_y_i = []
+            cxx = np.zeros(len(contours))  # TODO: distribute
+            cyy = np.zeros(len(contours))
+            for i, (cx, cy, cnt) in enumerate(get_center_moment(contours, interface.min_area, interface.max_area)):
+                count_cross_line.filter_cross(cx, cy)
+                follow_rectangle(image, cx, cy, cnt)
+                cxx[i] = cx  # TODO: distribute all what bottom
+                cyy[i] = cy
+            count_cross_line.switch_color_line(line_bounds)
+            cxx = [i for i in cxx if i != 0]
+            cyy = [i for i in cyy if i != 0]
+            add_x_i = []
+            add_y_i = []
 
-        # if len(cxx):
-        #     if not car
+            if len(cxx):
+                if not file_statistic.obj_id:
+                    for i in range(len(cxx)):
+                        file_statistic.obj_id.append(i)
+                        file_statistic.df[str(file_statistic.obj_id[i])] = ''
+                        file_statistic.df.at[
+                            int(file_statistic.frame_number), str(file_statistic.obj_id[i])] = [cxx[i], cyy[i]]
+                        file_statistic.obj_total = file_statistic.obj_id[i] + 1
+                else:
+                    dx = np.zeros((len(cxx), len(file_statistic.obj_id)))
+                    dy = np.zeros((len(cyy), len(file_statistic.obj_id)))
+                    for i in range(len(cxx)):
+                        for j in range(len(file_statistic.obj_id)):
+                            old_cx_cy = file_statistic.df \
+                                .iloc[int(file_statistic.frame_number - 1)][str(file_statistic.obj_id[j])]
+                            current_cx_cy = np.array([cxx[i], cyy[i]])
+                            if not old_cx_cy:
+                                continue
+                            else:
+                                dx[i, j] = old_cx_cy[0] - current_cx_cy[0]
+                                dy[i, j] = old_cx_cy[1] - current_cx_cy[1]
 
-        # TODO: to this place
-        cv2.imshow("contours", image)
-        cv2.moveWindow("contours", 0, 0)
-        cv2.imshow("foreground mask", foreground_mask)
-        cv2.moveWindow("foreground mask", int(image.shape[1] * 1.2), 0)
+                    for j in range(len(file_statistic.obj_id)):
+                        sum_dx_dy = np.abs(dx[:, j]) + np.abs(dy[:, j])
 
-        if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
+            # TODO: to this place
+            cv2.imshow("contours", image)
+            cv2.moveWindow("contours", 0, 0)
+            cv2.imshow("foreground mask", foreground_mask)
+            cv2.moveWindow("foreground mask", int(image.shape[1] * 1.2), 0)
+
+            if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
+                break
+
+            video_statistic.write_record(frame)
+        else:
             break
 
-        video_statistic.write_record(image)
-
     camera.stop_record()
+    video_statistic.stop_record()
     cv2.destroyAllWindows()
 
     file_statistic.save_data()

@@ -32,7 +32,7 @@ class Interface:
             self.max_area = 8000
 
             # if old_center
-            self.max_rad = 0.5
+            self.max_rad = 100
 
         elif space == 'Camera':
             self.record = 'buffer.txt'
@@ -94,13 +94,13 @@ class Camera(Interface):
         self.cap = cv2.VideoCapture(self.get_full_path_input())
 
     def get_param_camera(self):
-        params = {
+        params_ = {
             'frames_count': self.cap.get(cv2.CAP_PROP_FRAME_COUNT),
             'fps': self.cap.get(cv2.CAP_PROP_FPS),
             'width': self.cap.get(cv2.CAP_PROP_FRAME_WIDTH),
             'height': self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT),
         }
-        return params
+        return params_
 
     def read(self):
         return self.cap.read()
@@ -288,6 +288,7 @@ if __name__ == "__main__":
     )  # разделить на два слоя bg и fg
 
     console.log_input()
+    params = camera.get_param_camera()
     file_statistic.set_index()
     video_statistic.set_record()
 
@@ -402,7 +403,7 @@ if __name__ == "__main__":
                 current_center = file_statistic.df \
                     .iloc[int(file_statistic.frame_number)][str(file_statistic.obj_id[current_objects_index[i]])]
                 old_center = file_statistic.df \
-                    .iloc[int(file_statistic.frame_number-1)][str(file_statistic.obj_id[current_objects_index[i]])]
+                    .iloc[int(file_statistic.frame_number - 1)][str(file_statistic.obj_id[current_objects_index[i]])]
                 if current_center:
                     cv2.putText(
                         image,
@@ -444,6 +445,76 @@ if __name__ == "__main__":
                             1
                         )
 
+            field_t = np.zeros((700, 700, 3), np.uint8)
+
+            cv2.rectangle(field_t, (0, 0), (700, 700), (255, 255, 255),
+                          -1)  # фоновый прямоугольник для текста на экране
+
+            cv2.putText(field_t, '******************** Video options ***************************', (0, 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+            cv2.putText(field_t, "* Objects in area: " + str(current_objects), (0, 40), cv2.FONT_HERSHEY_SIMPLEX, .7,
+                        (0, 0, 0), 2)
+
+            cv2.putText(field_t, "* Total object detect: " + str(len(file_statistic.obj_id)), (0, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, "* Frame: " + str(file_statistic.frame_number) + ' of ' + str(params['frames_count']),
+                        (0, 80), cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t,
+                        '* Time: ' + str(round(file_statistic.frame_number / params['fps'], 2)) + ' sec of ' +
+                        str(round(params['frames_count'] / params['fps'], 2)) + ' sec',
+                        (0, 100), cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, '**************************************************************', (0, 120),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, '* Number of frames:                      ' + str(params['frames_count']), (0, 140),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, '* FPS:                                    ' + str(params['fps']), (0, 160),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, '* Extension:                         ' +
+                        str(params['width']) + ' x ' + str(params['height']) + ' px', (0, 180),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, '**************************************************************', (0, 200),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, "* CURRENT LIFTS: {}".format(*count_cross_line.done_cross), (0, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, "* TOTAL LIFTS: " + str(count_cross_line.total), (0, 260),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            cv2.putText(field_t, '**************************************************************', (0, 300),
+                        cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
+
+            # отображает изображения и преобразования
+            cv2.imshow("countours", image)
+            cv2.moveWindow("countours", 0, 0)
+
+            cv2.imshow("fgmask", foreground_mask)
+            cv2.moveWindow("fgmask", int(params['height'] * interface.ratio) + 20, 0)
+
+            cv2.imshow("closing", closing)
+            cv2.moveWindow("closing", 0, int(params['height'] * interface.ratio))
+
+            cv2.imshow("opening", opening)
+            cv2.moveWindow("opening", int(params['height'] * interface.ratio) + 20,
+                           int(params['height'] * interface.ratio))
+
+            cv2.imshow("dilation", dilation)
+            cv2.moveWindow("dilation", 0, 2 * int(params['height'] * interface.ratio))
+
+            cv2.imshow("binary", arr_bins)
+            cv2.moveWindow("binary", int(params['height'] * interface.ratio) + 20,
+                           2 * int(params['height'] * interface.ratio))
+
+            cv2.imshow("field text", field_t)
+            cv2.moveWindow("field text", 3 * int(params['height'] * interface.ratio) - 100, 0)
+
             # TODO: to this place
             cv2.imshow('contours', image)
             cv2.moveWindow('contours', 0, 0)
@@ -458,7 +529,10 @@ if __name__ == "__main__":
             except cv2.error as e:
                 continue
 
+            file_statistic.frame_number += 1
+
             video_statistic.write_record(frame)
+            video_statistic.write_record(field_t)
 
         else:
             break

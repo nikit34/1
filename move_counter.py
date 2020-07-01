@@ -181,21 +181,21 @@ class LineBounds(Camera, Interface):
         self.bond = [0 for _ in range(self.count_lines)]
 
     def create_lines(self, ratio_line):
-        for i, line in enumerate(self.lines):
-            self.coord_p1[i] = (
+        for i_, line in enumerate(self.lines):
+            self.coord_p1[i_] = (
                 int(self.param['width'] * line['p1'][0] / 100 * ratio_line),
                 int(self.param['height'] * line['p1'][1] / 100 * ratio_line)
             )
-            self.coord_p2[i] = (
+            self.coord_p2[i_] = (
                 int(self.param['width'] * line['p2'][0] / 100 * ratio_line),
                 int(self.param['height'] * line['p2'][1] / 100 * ratio_line)
             )
-            self.rgb[i] = line['rgb']
-            self.bond[i] = line['bond']
+            self.rgb[i_] = line['rgb']
+            self.bond[i_] = line['bond']
 
     def update_lines(self, img):
-        for i in range(self.count_lines):
-            cv2.line(img, self.coord_p1[i], self.coord_p2[i], self.rgb[i], self.bond[i])
+        for i_ in range(self.count_lines):
+            cv2.line(img, self.coord_p1[i_], self.coord_p2[i_], self.rgb[i_], self.bond[i_])
 
 
 def follow_rectangle(img, cx_, cy_, cnt_):
@@ -212,8 +212,6 @@ class CountCrossLine(Interface):
         self.done_cross = [False for _ in range(len(self.lines))]
         self.total = 0
         self.last_time = [0. for _ in range(len(self.lines))]
-        self.cxx = []
-        self.cyy = []
 
     def filter_cross(self, cx_, cy_):
         for i_line, line in enumerate(self.lines):
@@ -228,17 +226,17 @@ class CountCrossLine(Interface):
                     self.update()
 
     def switch_color_line(self, obj_line_bounds):
-        for i in range(len(self.lines)):
-            if self.count_cross[i] == 1:
-                obj_line_bounds.rgb[i] = (0, 100, 100)
-            elif self.count_cross[i] == 2:
-                obj_line_bounds.rgb[i] = (0, 200, 200)
-            elif self.count_cross[i] == 3:
-                obj_line_bounds.rgb[i] = (0, 255, 255)
-            elif self.done_cross[i]:
-                obj_line_bounds.rgb[i] = (0, 255, 0)
+        for i_ in range(len(self.lines)):
+            if self.count_cross[i_] == 1:
+                obj_line_bounds.rgb[i_] = (0, 100, 100)
+            elif self.count_cross[i_] == 2:
+                obj_line_bounds.rgb[i_] = (0, 200, 200)
+            elif self.count_cross[i_] == 3:
+                obj_line_bounds.rgb[i_] = (0, 255, 255)
+            elif self.done_cross[i_]:
+                obj_line_bounds.rgb[i_] = (0, 255, 0)
             else:
-                obj_line_bounds.rgb[i] = (0, 0, 255)
+                obj_line_bounds.rgb[i_] = (0, 0, 255)
 
     @staticmethod
     def dist_point_line(point, line1, line2):
@@ -330,7 +328,7 @@ if __name__ == "__main__":
 
         cxx = np.zeros(len(contours))  # TODO: distribute
         cyy = np.zeros(len(contours))
-        for i, cx, cy, cnt in enumerate(get_center_moment(contours, interface.min_area, interface.max_area)):
+        for i, (cx, cy, cnt) in enumerate(get_center_moment(contours, interface.min_area, interface.max_area)):
             count_cross_line.filter_cross(cx, cy)
             follow_rectangle(image, cx, cy, cnt)
             cxx[i] = cx  # TODO: distribute all what bottom
@@ -341,7 +339,8 @@ if __name__ == "__main__":
         add_x_i = []
         add_y_i = []
 
-        if
+        # if len(cxx):
+        #     if not car
 
         # TODO: to this place
         cv2.imshow("contours", image)

@@ -508,32 +508,39 @@ if __name__ == "__main__":
 
             # отображает изображения и преобразования
             cv2.imshow("countours", image)
-            cv2.moveWindow("countours", 0, 0)
+            cv2.moveWindow("countours",
+                           0,
+                           0)
 
             cv2.imshow("fgmask", foreground_mask)
-            cv2.moveWindow("fgmask", int(params['height'] * interface.ratio) + 20, 0)
+            cv2.moveWindow("fgmask",
+                           int(params['width'] * interface.ratio),
+                           0)
 
             cv2.imshow("closing", closing)
-            cv2.moveWindow("closing", 0, int(params['height'] * interface.ratio))
+            cv2.moveWindow("closing",
+                           0,
+                           int(params['height'] * interface.ratio))
 
             cv2.imshow("opening", opening)
-            cv2.moveWindow("opening", int(params['height'] * interface.ratio) + 20,
+            cv2.moveWindow("opening",
+                           int(params['width'] * interface.ratio),
                            int(params['height'] * interface.ratio))
 
             cv2.imshow("dilation", dilation)
-            cv2.moveWindow("dilation", 0, 2 * int(params['height'] * interface.ratio))
+            cv2.moveWindow("dilation",
+                           0,
+                           2 * int(params['height'] * interface.ratio))
 
             cv2.imshow("binary", arr_bins)
-            cv2.moveWindow("binary", int(params['height'] * interface.ratio) + 20,
+            cv2.moveWindow("binary",
+                           int(params['width'] * interface.ratio),
                            2 * int(params['height'] * interface.ratio))
 
             cv2.imshow("field text", field_t)
-            cv2.moveWindow("field text", 3 * int(params['height'] * interface.ratio) - 100, 0)
-
-            cv2.imshow('contours', image)
-            cv2.moveWindow('contours', 0, 0)
-            cv2.imshow('foreground mask', foreground_mask)
-            cv2.moveWindow('foreground mask', int(image.shape[1] * 1.2), 0)
+            cv2.moveWindow("field text",
+                           3 * int(params['width'] * interface.ratio),
+                           0)
 
             if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
                 break

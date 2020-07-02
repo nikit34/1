@@ -55,32 +55,32 @@ class Interface:
             self.lines = [
                 {
                     'id_': 'top-left',
-                    'p1': (0, 35),
-                    'p2': (35, -30),
-                    'rgb': (0, 0, 255),
-                    'bond': 2,
-                    'cross': 2,
-                },
-                {
-                    'id_': 'bottom-right',
-                    'p1': (25, 100),
-                    'p2': (90, 0),
+                    'p1': (60, 20),
+                    'p2': (90, 10),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
                 },
                 {
                     'id_': 'bottom-left',
-                    'p1': (0, 35),
-                    'p2': (50, 100),
+                    'p1': (60, 80),
+                    'p2': (90, 90),
+                    'rgb': (0, 0, 255),
+                    'bond': 2,
+                    'cross': 2,
+                },
+                {
+                    'id_': 'bottom-right',
+                    'p1': (40, 80),
+                    'p2': (10, 90),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
                 },
                 {
                     'id_': 'top-right',
-                    'p1': (35, -30),
-                    'p2': (100, 100),
+                    'p1': (40, 20),
+                    'p2': (10, 10),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
@@ -88,10 +88,21 @@ class Interface:
             ]
 
 
-class Camera(Interface):
+# class Camera(Interface):
+#     def __init__(self):
+#         super(Camera, self).__init__('Camera')
+#         self.cap = cv2.VideoCapture(self.get_full_path_input())
+#
+#     def get_full_path_input(self) -> str:
+#         path = self.root_path + self.env
+#         file = open(path + self.record)
+#         full_path = path + 'in/' + file.read()
+#         return full_path
+
+
+class Camera:
     def __init__(self):
-        super(Camera, self).__init__('Camera')
-        self.cap = cv2.VideoCapture(self.get_full_path_input())
+        self.cap = cv2.VideoCapture(0)
 
     def get_param_camera(self):
         params_ = {
@@ -104,12 +115,6 @@ class Camera(Interface):
 
     def read(self):
         return self.cap.read()
-
-    def get_full_path_input(self) -> str:
-        path = self.root_path + self.env
-        file = open(path + self.record)
-        full_path = path + 'in/' + file.read()
-        return full_path
 
     def stop_record(self):
         self.cap.release()
@@ -269,7 +274,7 @@ def dist_point_line(point, line1, line2):
         line2[0] * line1[1] - line2[1] * line1[0]
     )
     dist_line = math.sqrt(pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2))
-    return int(area_double_triangle / dist_line)
+    return int(area_double_triangle / (dist_line + 1))
 
 
 if __name__ == "__main__":
@@ -506,40 +511,43 @@ if __name__ == "__main__":
             cv2.putText(field_t, '**************************************************************', (0, 300),
                         cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 0, 0), 2)
 
+            image = cv2.flip(image, 1)
+            image = cv2.resize(image, (1200, 800))
+
             # отображает изображения и преобразования
             cv2.imshow("countours", image)
             cv2.moveWindow("countours",
                            0,
                            0)
 
-            cv2.imshow("fgmask", foreground_mask)
-            cv2.moveWindow("fgmask",
-                           int(params['width'] * interface.ratio),
-                           0)
-
-            cv2.imshow("closing", closing)
-            cv2.moveWindow("closing",
-                           0,
-                           int(params['height'] * interface.ratio))
-
-            cv2.imshow("opening", opening)
-            cv2.moveWindow("opening",
-                           int(params['width'] * interface.ratio),
-                           int(params['height'] * interface.ratio))
-
-            cv2.imshow("dilation", dilation)
-            cv2.moveWindow("dilation",
-                           0,
-                           2 * int(params['height'] * interface.ratio))
-
-            cv2.imshow("binary", arr_bins)
-            cv2.moveWindow("binary",
-                           int(params['width'] * interface.ratio),
-                           2 * int(params['height'] * interface.ratio))
+            # cv2.imshow("fgmask", foreground_mask)
+            # cv2.moveWindow("fgmask",
+            #                int(params['width'] * interface.ratio),
+            #                0)
+            #
+            # cv2.imshow("closing", closing)
+            # cv2.moveWindow("closing",
+            #                0,
+            #                int(params['height'] * interface.ratio))
+            #
+            # cv2.imshow("opening", opening)
+            # cv2.moveWindow("opening",
+            #                int(params['width'] * interface.ratio),
+            #                int(params['height'] * interface.ratio))
+            #
+            # cv2.imshow("dilation", dilation)
+            # cv2.moveWindow("dilation",
+            #                0,
+            #                2 * int(params['height'] * interface.ratio))
+            #
+            # cv2.imshow("binary", arr_bins)
+            # cv2.moveWindow("binary",
+            #                int(params['width'] * interface.ratio),
+            #                2 * int(params['height'] * interface.ratio))
 
             cv2.imshow("field text", field_t)
             cv2.moveWindow("field text",
-                           3 * int(params['width'] * interface.ratio),
+                           4 * int(params['width'] * interface.ratio),
                            0)
 
             if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255

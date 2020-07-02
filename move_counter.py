@@ -336,15 +336,16 @@ if __name__ == "__main__":
                 cxx[i] = cx  # TODO: distribute all what bottom
                 cyy[i] = cy
             count_cross_line.switch_color_line(line_bounds)
-            cxx = cxx[cxx != 0]
-            cyy = cyy[cyy != 0]
+            cxx = [i for i in cxx if i]
+            cyy = [i for i in cyy if i]
             add_min_x_i = []
             add_min_y_i = []
             current_cx_cy = []
             old_cx_cy = []
 
             if len(cxx):
-                if not file_statistic.obj_id:
+                if any(item in file_statistic.obj_id for item in file_statistic.df.columns) or \
+                        not file_statistic.obj_id:  # при обнаружении нового объекта
                     for i in range(len(cxx)):
                         file_statistic.obj_id.append(i)
                         file_statistic.df[str(file_statistic.obj_id[i])] = ''
@@ -354,16 +355,18 @@ if __name__ == "__main__":
                 else:
                     dx = np.zeros((len(cxx), len(file_statistic.obj_id)))
                     dy = np.zeros((len(cyy), len(file_statistic.obj_id)))
-                    for i in range(len(cxx)):
-                        for j in range(len(file_statistic.obj_id)):
-                            old_cx_cy = file_statistic.df \
-                                .iloc[int(file_statistic.frame_number - 1)][str(file_statistic.obj_id[j])]
-                            current_cx_cy = np.array([cxx[i], cyy[i]])
-                            if not old_cx_cy:
-                                continue
-                            else:
-                                dx[i, j] = old_cx_cy[0] - current_cx_cy[0]
-                                dy[i, j] = old_cx_cy[1] - current_cx_cy[1]
+
+                    if file_statistic.frame_number - 1 in file_statistic.df.index:
+                        for i in range(len(cxx)):
+                            for j in range(len(file_statistic.obj_id)):
+                                old_cx_cy = file_statistic.df \
+                                    .loc[int(file_statistic.frame_number - 1)][str(file_statistic.obj_id[j])]
+                                current_cx_cy = np.array([cxx[i], cyy[i]])
+                                if type(old_cx_cy) != 'list' or any(math.isnan(item) for item in old_cx_cy):
+                                    continue
+                                else:
+                                    dx[i, j] = old_cx_cy[0] - current_cx_cy[0]
+                                    dy[i, j] = old_cx_cy[1] - current_cx_cy[1]
 
                     for j in range(len(file_statistic.obj_id)):
                         sum_dx_dy = np.abs(dx[:, j]) + np.abs(dy[:, j])
@@ -375,7 +378,7 @@ if __name__ == "__main__":
                         if min_dx == 0 and min_dy == 0 and np.all(dx[:, j] == 0) and np.all(dy[:, j] == 0):
                             continue
                         else:
-                            if np.abs(min_dx) < interface.max_rad and np.abs(min_dy) < interface.max_rad:
+                            if np.abs(min_dx) > interface.max_rad and np.abs(min_dy) > interface.max_rad:
                                 file_statistic.df \
                                     .at[int(file_statistic.frame_number),
                                         str(file_statistic.obj_id[j])] = [cxx[min_sum_i], cyy[min_sum_i]]
@@ -384,7 +387,7 @@ if __name__ == "__main__":
 
                     for i in range(len(cxx)):
                         if (i not in add_min_x_i and add_min_y_i) or \
-                                (current_cx_cy[0] and not old_cx_cy and not add_min_x_i and not add_min_y_i):
+                                (not old_cx_cy and not add_min_x_i and not add_min_y_i):
                             file_statistic.df[str(file_statistic.obj_total)] = ''
                             file_statistic.obj_id.append(file_statistic.obj_total)
                             file_statistic.df \
@@ -395,16 +398,22 @@ if __name__ == "__main__":
             current_objects = 0
             current_objects_index = []
 
-            for i in range(len(file_statistic.obj_id)):
-                if file_statistic.df.at[int(file_statistic.frame_number), str(file_statistic.obj_id[i])] != '':
-                    current_objects += 1
-                    current_objects_index.append(i)
+            if len(cxx):
+                for i in range(len(file_statistic.obj_id)):
+                    if file_statistic.frame_number \
+                            in file_statistic.df.index \
+                            and file_statistic.df \
+                            .at[int(file_statistic.frame_number), str(file_statistic.obj_id[i])] != '':
+                        current_objects += 1
+                        current_objects_index.append(i)
             for i in range(current_objects):
-                current_center = file_statistic.df \
-                    .iloc[int(file_statistic.frame_number)][str(file_statistic.obj_id[current_objects_index[i]])]
-                old_center = file_statistic.df \
-                    .iloc[int(file_statistic.frame_number - 1)][str(file_statistic.obj_id[current_objects_index[i]])]
-                if current_center:
+                if len(cxx):
+                    current_center = file_statistic.df \
+                        .loc[int(file_statistic.frame_number)][str(file_statistic.obj_id[current_objects_index[i]])]
+                    if file_statistic.frame_number - 1 in file_statistic.df.index and len(file_statistic.df) >= 2:
+                        old_center = file_statistic.df \
+                            .loc[int(file_statistic.frame_number-1)][str(file_statistic.obj_id[current_objects_index[i]])]
+                if type(current_center) == 'list' and not any(math.isnan(item) for item in current_center):
                     cv2.putText(
                         image,
                         'C*d: ' + str(current_center[0]) + ', ' + str(current_center[1]),
@@ -432,7 +441,7 @@ if __name__ == "__main__":
                         thickness=1,
                         line_type=cv2.LINE_AA
                     )
-                    if old_center:
+                    if len(cxx) and len(file_statistic.df) >= 2:
                         x_start = old_center[0] - interface.max_rad
                         y_start = old_center[1] - interface.max_rad
                         x_width = old_center[0] + interface.max_rad

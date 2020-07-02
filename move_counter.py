@@ -10,9 +10,9 @@ class Interface:
     def __init__(self, space):
         if space == 'main':
             # createBackgroundSubtractorMOG2
-            self.history = 100
-            self.varThreshold = 0
-            self.detectShadows = False
+            self.history = 500  # учет прошлых шагов
+            self.varThreshold = 100
+            self.detectShadows = True  # отсекает тени
 
             # resize
             self.ratio = 0.5
@@ -23,16 +23,16 @@ class Interface:
             self.anchor = (-1, -1)
 
             # threshold
-            self.thresh = 200
+            self.thresh = 200  # порог разницы пикселей
             self.maxval_threshold = 255
             self.type = cv2.THRESH_TRIANGLE
 
             # count_cross_line
-            self.min_area = 5000
-            self.max_area = 8000
+            self.min_area = 4000  # мин макс площадь объекта
+            self.max_area = 7000
 
             # if old_center
-            self.max_rad = 50
+            self.max_rad = 2  # порог для определения уникальности объектов
 
         elif space == 'Camera':
             self.record = 'buffer.txt'
@@ -44,8 +44,8 @@ class Interface:
             self.statistic = 'test0.csv'
 
         elif space == 'CountCrossLine':
-            self.epsilon = 200
-            self.timeout = 0.5
+            self.epsilon = 100  # мин расстояние до границы пересечения
+            self.timeout = 0.2  # таймаут приостановки учета пересечений
 
         if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
             self.env = '/local/'
@@ -55,32 +55,32 @@ class Interface:
             self.lines = [
                 {
                     'id_': 'top-left',
-                    'p1': (60, 20),
-                    'p2': (90, 10),
+                    'p1': (70, 40),
+                    'p2': (99, 30),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
                 },
                 {
                     'id_': 'bottom-left',
-                    'p1': (60, 80),
-                    'p2': (90, 90),
+                    'p1': (70, 70),
+                    'p2': (99, 80),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
                 },
                 {
                     'id_': 'bottom-right',
-                    'p1': (40, 80),
-                    'p2': (10, 90),
+                    'p1': (30, 70),
+                    'p2': (1, 80),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
                 },
                 {
                     'id_': 'top-right',
-                    'p1': (40, 20),
-                    'p2': (10, 10),
+                    'p1': (30, 40),
+                    'p2': (1, 30),
                     'rgb': (0, 0, 255),
                     'bond': 2,
                     'cross': 2,
@@ -222,10 +222,14 @@ class CountCrossLine(Interface):
 
     def filter_cross(self, cx_, cy_):
         for i_line, line in enumerate(self.lines):
-            if self.timeout < time.time() - self.last_time[i_line]:
-                if dist_point_line((cx_, cy_), line['p1'], line['p2']) < self.epsilon:
-                    self.count_cross[i_line] += 1
-                    self.last_time[i_line] = time.time()
+            while True:
+                if self.timeout < time.time() - self.last_time[i_line]:
+                    if square_dist_point_line((cx_, cy_), line['p1'], line['p2']) < self.epsilon and \
+                            square_min_dist_extreme_point_circles((cx_, cy_), line['p1'], line['p2']) <= \
+                            square_radius_circles(line['p1'], line['p2']) + self.epsilon:
+                        self.count_cross[i_line] += 1
+                        self.last_time[i_line] = time.time()
+                    break
 
             if self.count_cross[i_line] >= line['cross']:
                 self.done_cross[i_line] = True
@@ -267,14 +271,24 @@ def get_center_moment(current_contours, min_area, max_area):
         yield cx_, cy_, cnt_
 
 
-def dist_point_line(point, line1, line2):
+def square_min_dist_extreme_point_circles(point, line1, line2):
+    sq_dist_p1 = pow((line1[0] - point[0]), 2) + pow((line1[1] - point[1]), 2)
+    sq_dist_p2 = pow((line2[0] - point[0]), 2) + pow((line2[1] - point[1]), 2)
+    return min(sq_dist_p1, sq_dist_p2)
+
+
+def square_radius_circles(line1, line2):
+    return (pow((line1[0] - line2[0]), 2) + pow((line1[1] - line2[1]), 2)) / 4
+
+
+def square_dist_point_line(point, line1, line2):
     area_double_triangle = abs(
         (line2[1] - line1[1]) * point[0] -
         (line2[0] - line1[0]) * point[1] +
         line2[0] * line1[1] - line2[1] * line1[0]
     )
-    dist_line = math.sqrt(pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2))
-    return int(area_double_triangle / (dist_line + 1))
+    dist_line = pow((line2[1] - line1[1]), 2) + pow((line2[0] - line1[0]), 2)
+    return int(pow(area_double_triangle, 2) / (dist_line + 1))
 
 
 if __name__ == "__main__":
@@ -384,7 +398,7 @@ if __name__ == "__main__":
                         if min_dx == 0 and min_dy == 0 and np.all(dx[:, j] == 0) and np.all(dy[:, j] == 0):
                             continue
                         else:
-                            if np.abs(min_dx) > interface.max_rad and np.abs(min_dy) > interface.max_rad:
+                            if np.abs(min_dx) < interface.max_rad and np.abs(min_dy) < interface.max_rad:
                                 file_statistic.df \
                                     .at[int(file_statistic.frame_number),
                                         str(file_statistic.obj_id[j])] = [cxx[int(min_sum_i)], cyy[int(min_sum_i)]]
@@ -440,7 +454,7 @@ if __name__ == "__main__":
                 if isinstance(current_center, list):
                     cv2.putText(
                         image,
-                        'C*d: ' + str(current_center[0]) + ', ' + str(current_center[1]),
+                        'Cd: ' + str(current_center[0]) + ', ' + str(current_center[1]),
                         (int(current_center[0]), int(current_center[1])),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         .5,
@@ -514,9 +528,8 @@ if __name__ == "__main__":
             image = cv2.flip(image, 1)
             image = cv2.resize(image, (1200, 800))
 
-            # отображает изображения и преобразования
-            cv2.imshow("countours", image)
-            cv2.moveWindow("countours",
+            cv2.imshow("contours", image)
+            cv2.moveWindow("contours",
                            0,
                            0)
 
@@ -544,11 +557,11 @@ if __name__ == "__main__":
             # cv2.moveWindow("binary",
             #                int(params['width'] * interface.ratio),
             #                2 * int(params['height'] * interface.ratio))
-
-            cv2.imshow("field text", field_t)
-            cv2.moveWindow("field text",
-                           4 * int(params['width'] * interface.ratio),
-                           0)
+            #
+            # cv2.imshow("field text", field_t)
+            # cv2.moveWindow("field text",
+            #                4 * int(params['width'] * interface.ratio),
+            #                0)
 
             if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
                 break

@@ -32,7 +32,7 @@ class Interface:
             self.max_area = 8000
 
             # if old_center
-            self.max_rad = 100
+            self.max_rad = 1
 
         elif space == 'Camera':
             self.record = 'buffer.txt'
@@ -344,8 +344,7 @@ if __name__ == "__main__":
             old_cx_cy = []
 
             if len(cxx):
-                if any(item in file_statistic.obj_id for item in file_statistic.df.columns) or \
-                        not file_statistic.obj_id:  # при обнаружении нового объекта
+                if not file_statistic.obj_id:  # при обнаружении нового объекта
                     for i in range(len(cxx)):
                         file_statistic.obj_id.append(i)
                         file_statistic.df[str(file_statistic.obj_id[i])] = ''
@@ -356,17 +355,19 @@ if __name__ == "__main__":
                     dx = np.zeros((len(cxx), len(file_statistic.obj_id)))
                     dy = np.zeros((len(cyy), len(file_statistic.obj_id)))
 
-                    if file_statistic.frame_number - 1 in file_statistic.df.index:
-                        for i in range(len(cxx)):
-                            for j in range(len(file_statistic.obj_id)):
-                                old_cx_cy = file_statistic.df \
-                                    .loc[int(file_statistic.frame_number - 1)][str(file_statistic.obj_id[j])]
-                                current_cx_cy = np.array([cxx[i], cyy[i]])
-                                if type(old_cx_cy) != 'list' or any(math.isnan(item) for item in old_cx_cy):
-                                    continue
-                                else:
-                                    dx[i, j] = old_cx_cy[0] - current_cx_cy[0]
-                                    dy[i, j] = old_cx_cy[1] - current_cx_cy[1]
+                    for i in range(len(cxx)):
+                        for j in range(len(file_statistic.obj_id)):
+                            for f in range(file_statistic.frame_number):
+                                if file_statistic.frame_number - f in file_statistic.df.index:
+                                    old_cx_cy = file_statistic.df \
+                                        .loc[int(file_statistic.frame_number - f)][str(file_statistic.obj_id[j])]
+                                    current_cx_cy = np.array([cxx[i], cyy[i]])
+                                    if not isinstance(old_cx_cy, list) or any(math.isnan(item) for item in old_cx_cy):
+                                        continue
+                                    else:
+                                        dx[i, j] = old_cx_cy[0] - current_cx_cy[0]
+                                        dy[i, j] = old_cx_cy[1] - current_cx_cy[1]
+                                    break
 
                     for j in range(len(file_statistic.obj_id)):
                         sum_dx_dy = np.abs(dx[:, j]) + np.abs(dy[:, j])
@@ -398,22 +399,36 @@ if __name__ == "__main__":
             current_objects = 0
             current_objects_index = []
 
-            if len(cxx):
-                for i in range(len(file_statistic.obj_id)):
-                    if file_statistic.frame_number \
-                            in file_statistic.df.index \
-                            and file_statistic.df \
-                            .at[int(file_statistic.frame_number), str(file_statistic.obj_id[i])] != '':
-                        current_objects += 1
-                        current_objects_index.append(i)
+            for i in range(len(file_statistic.obj_id)):
+                if file_statistic.frame_number \
+                        in file_statistic.df.index \
+                        and file_statistic.df \
+                        .at[int(file_statistic.frame_number), str(file_statistic.obj_id[i])] != '':
+                    current_objects += 1
+                    current_objects_index.append(i)
             for i in range(current_objects):
-                if len(cxx):
-                    current_center = file_statistic.df \
-                        .loc[int(file_statistic.frame_number)][str(file_statistic.obj_id[current_objects_index[i]])]
-                    if file_statistic.frame_number - 1 in file_statistic.df.index and len(file_statistic.df) >= 2:
+                current_center = file_statistic.df \
+                    .loc[int(file_statistic.frame_number)][str(file_statistic.obj_id[current_objects_index[i]])]
+                for f in range(file_statistic.frame_number):
+                    if file_statistic.frame_number - f - 1 in file_statistic.df.index:
                         old_center = file_statistic.df \
-                            .loc[int(file_statistic.frame_number-1)][str(file_statistic.obj_id[current_objects_index[i]])]
-                if type(current_center) == 'list' and not any(math.isnan(item) for item in current_center):
+                            .loc[int(file_statistic.frame_number-f-1)][str(file_statistic.obj_id[current_objects_index[i]])]
+
+                        if isinstance(old_center, list) and len(old_center) == 2:
+                            x_start = old_center[0] - interface.max_rad
+                            y_start = old_center[1] - interface.max_rad
+                            x_width = old_center[0] + interface.max_rad
+                            y_height = old_center[1] + interface.max_rad
+                            cv2.rectangle(
+                                image,
+                                (int(x_start), int(y_start)),
+                                (int(x_width), int(y_height)),
+                                (0, 125, 0),
+                                1
+                            )
+                        break
+
+                if isinstance(current_center, list):
                     cv2.putText(
                         image,
                         'C*d: ' + str(current_center[0]) + ', ' + str(current_center[1]),
@@ -441,18 +456,6 @@ if __name__ == "__main__":
                         thickness=1,
                         line_type=cv2.LINE_AA
                     )
-                    if len(cxx) and len(file_statistic.df) >= 2:
-                        x_start = old_center[0] - interface.max_rad
-                        y_start = old_center[1] - interface.max_rad
-                        x_width = old_center[0] + interface.max_rad
-                        y_height = old_center[1] + interface.max_rad
-                        cv2.rectangle(
-                            image,
-                            (int(x_start), int(y_start)),
-                            (int(x_width), int(y_height)),
-                            (0, 125, 0),
-                            1
-                        )
 
             field_t = np.zeros((700, 700, 3), np.uint8)
 

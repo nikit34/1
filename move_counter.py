@@ -8,6 +8,46 @@ import time
 
 class Interface:
     def __init__(self, space):
+        if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
+            self.env = '/local/'
+            self.root_path = os.path.dirname(os.path.abspath(__file__)) + '/data'
+
+        if space in ['LineBounds', 'CountCrossLine']:
+            self.lines = [
+                {
+                    'id_': 'top-left',
+                    'p1': (70, 40),
+                    'p2': (99, 30),
+                    'rgb': (0, 0, 255),
+                    'bond': 2,
+                    'cross': 2,
+                },
+                # {
+                #     'id_': 'bottom-left',
+                #     'p1': (70, 70),
+                #     'p2': (99, 80),
+                #     'rgb': (0, 0, 255),
+                #     'bond': 2,
+                #     'cross': 1,
+                # },
+                # {
+                #     'id_': 'bottom-right',
+                #     'p1': (30, 70),
+                #     'p2': (1, 80),
+                #     'rgb': (0, 0, 255),
+                #     'bond': 2,
+                #     'cross': 1,
+                # },
+                {
+                    'id_': 'top-right',
+                    'p1': (30, 40),
+                    'p2': (1, 30),
+                    'rgb': (0, 0, 255),
+                    'bond': 2,
+                    'cross': 2,
+                },
+            ]
+
         if space == 'main':
             # createBackgroundSubtractorMOG2
             self.history = 100  # учет прошлых шагов
@@ -34,6 +74,10 @@ class Interface:
             # if old_center
             self.max_rad = 1  # порог для определения уникальности объектов
 
+        elif space == 'CountCrossLine':
+            self.epsilon = 400  # мин расстояние до границы пересечения
+            self.timeout = 0.05  # таймаут приостановки учета пересечений
+
         elif space == 'Camera':
             self.record = 'buffer.txt'
 
@@ -42,50 +86,6 @@ class Interface:
 
         elif space == 'FileStatistic':
             self.statistic = 'test0.csv'
-
-        elif space == 'CountCrossLine':
-            self.epsilon = 400  # мин расстояние до границы пересечения
-            self.timeout = 0.05  # таймаут приостановки учета пересечений
-
-        if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
-            self.env = '/local/'
-            self.root_path = os.path.dirname(os.path.abspath(__file__)) + '/data'
-
-        if space in ['LineBounds', 'CountCrossLine']:
-            self.lines = [
-                {
-                    'id_': 'top-left',
-                    'p1': (70, 40),
-                    'p2': (99, 30),
-                    'rgb': (0, 0, 255),
-                    'bond': 2,
-                    'cross': 2,
-                },
-                {
-                    'id_': 'bottom-left',
-                    'p1': (70, 70),
-                    'p2': (99, 80),
-                    'rgb': (0, 0, 255),
-                    'bond': 2,
-                    'cross': 2,
-                },
-                {
-                    'id_': 'bottom-right',
-                    'p1': (30, 70),
-                    'p2': (1, 80),
-                    'rgb': (0, 0, 255),
-                    'bond': 2,
-                    'cross': 2,
-                },
-                {
-                    'id_': 'top-right',
-                    'p1': (30, 40),
-                    'p2': (1, 30),
-                    'rgb': (0, 0, 255),
-                    'bond': 2,
-                    'cross': 2,
-                },
-            ]
 
 
 # class Camera(Interface):

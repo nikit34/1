@@ -10,8 +10,8 @@ class Interface:
     def __init__(self, space):
         if space == 'main':
             # createBackgroundSubtractorMOG2
-            self.history = 500  # учет прошлых шагов
-            self.varThreshold = 100
+            self.history = 100  # учет прошлых шагов
+            self.varThreshold = 50
             self.detectShadows = True  # отсекает тени
 
             # resize
@@ -28,11 +28,11 @@ class Interface:
             self.type = cv2.THRESH_TRIANGLE
 
             # count_cross_line
-            self.min_area = 4000  # мин макс площадь объекта
-            self.max_area = 7000
+            self.min_area = 1000  # мин макс площадь объекта
+            self.max_area = 5000
 
             # if old_center
-            self.max_rad = 2  # порог для определения уникальности объектов
+            self.max_rad = 1  # порог для определения уникальности объектов
 
         elif space == 'Camera':
             self.record = 'buffer.txt'
@@ -44,8 +44,8 @@ class Interface:
             self.statistic = 'test0.csv'
 
         elif space == 'CountCrossLine':
-            self.epsilon = 100  # мин расстояние до границы пересечения
-            self.timeout = 0.2  # таймаут приостановки учета пересечений
+            self.epsilon = 400  # мин расстояние до границы пересечения
+            self.timeout = 0.05  # таймаут приостановки учета пересечений
 
         if space in ['Camera', 'VideoStatistic', 'FileStatistic']:
             self.env = '/local/'
@@ -558,10 +558,10 @@ if __name__ == "__main__":
             #                int(params['width'] * interface.ratio),
             #                2 * int(params['height'] * interface.ratio))
             #
-            # cv2.imshow("field text", field_t)
-            # cv2.moveWindow("field text",
-            #                4 * int(params['width'] * interface.ratio),
-            #                0)
+            cv2.imshow("field text", field_t)
+            cv2.moveWindow("field text",
+                           4 * int(params['width'] * interface.ratio),
+                           0)
 
             if cv2.waitKey(int(1000 / camera.get_param_camera()['fps'])) & 0xff == 27:  # 0xff <-> 255
                 break

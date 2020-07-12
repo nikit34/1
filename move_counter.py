@@ -18,7 +18,7 @@ class Interface:
                     'id_': 'top-left',
                     'p1': (70, 40),
                     'p2': (99, 30),
-                    'rgb': (0, 0, 255),
+                    'rgb': (0, 0, 255),  # red
                     'bond': 2,
                     'cross': 2,
                 },
@@ -48,14 +48,15 @@ class Interface:
                 },
             ]
 
+        if space in ['main', 'LineBounds']:
+            # resize
+            self.ratio = 0.5
+
         if space == 'main':
             # createBackgroundSubtractorMOG2
             self.history = 100  # учет прошлых шагов
             self.varThreshold = 50
             self.detectShadows = True  # отсекает тени
-
-            # resize
-            self.ratio = 0.5
 
             # get_structuring_element
             self.shape = cv2.MORPH_ELLIPSE
@@ -187,15 +188,15 @@ class LineBounds(Interface):
         self.rgb = [(0, 0, 0) for _ in range(self.count_lines)]
         self.bond = [0 for _ in range(self.count_lines)]
 
-    def create_lines(self, ratio_line):
+    def create_lines(self):
         for i_, line in enumerate(self.lines):
             self.coord_p1[i_] = (
-                int(self.param['width'] * line['p1'][0] / 100 * ratio_line),
-                int(self.param['height'] * line['p1'][1] / 100 * ratio_line)
+                int(self.param['width'] * line['p1'][0] / 100 * self.ratio),
+                int(self.param['height'] * line['p1'][1] / 100 * self.ratio)
             )
             self.coord_p2[i_] = (
-                int(self.param['width'] * line['p2'][0] / 100 * ratio_line),
-                int(self.param['height'] * line['p2'][1] / 100 * ratio_line)
+                int(self.param['width'] * line['p2'][0] / 100 * self.ratio),
+                int(self.param['height'] * line['p2'][1] / 100 * self.ratio)
             )
             self.rgb[i_] = line['rgb']
             self.bond[i_] = line['bond']
@@ -203,6 +204,9 @@ class LineBounds(Interface):
     def update_lines(self, img):
         for i_ in range(self.count_lines):
             cv2.line(img, self.coord_p1[i_], self.coord_p2[i_], self.rgb[i_], self.bond[i_])
+
+    def get_coord_lines(self):
+        return self.coord_p1, self.coord_p2
 
 
 def follow_rectangle(img, cx_, cy_, cnt_):
@@ -213,8 +217,9 @@ def follow_rectangle(img, cx_, cy_, cnt_):
 
 
 class CountCrossLine(Interface):
-    def __init__(self):
+    def __init__(self, lines):
         super(CountCrossLine, self).__init__('CountCrossLine')
+        self.coord_lines = lines.get_coord_lines()
         self.count_cross = [0 for _ in range(len(self.lines))]
         self.done_cross = [False for _ in range(len(self.lines))]
         self.total = 0
@@ -222,19 +227,17 @@ class CountCrossLine(Interface):
 
     def filter_cross(self, cx_, cy_):
         for i_line, line in enumerate(self.lines):
-            while True:
-                if self.timeout < time.time() - self.last_time[i_line]:
-                    if square_dist_point_line((cx_, cy_), line['p1'], line['p2']) < self.epsilon and \
-                            square_min_dist_extreme_point_circles((cx_, cy_), line['p1'], line['p2']) <= \
-                            square_radius_circles(line['p1'], line['p2']) + self.epsilon:
-                        self.count_cross[i_line] += 1
-                        self.last_time[i_line] = time.time()
-                    break
+            if self.timeout < time.time() - self.last_time[i_line]:
+                if square_dist_point_line((cx_, cy_), self.coord_lines[0][i_line], self.coord_lines[1][i_line]) < self.epsilon and \
+                        square_min_dist_extreme_point_circles((cx_, cy_), self.coord_lines[0][i_line], self.coord_lines[1][i_line]) <= \
+                        square_radius_circles(self.coord_lines[0][i_line], self.coord_lines[1][i_line]) + self.epsilon:
+                    self.count_cross[i_line] += 1
+                    self.last_time[i_line] = time.time()
 
-            if self.count_cross[i_line] >= line['cross']:
-                self.done_cross[i_line] = True
-                if False not in self.done_cross:
-                    self.update()
+                    if self.count_cross[i_line] >= line['cross']:
+                        self.done_cross[i_line] = True
+                        if False not in self.done_cross:
+                            self.update()
 
     def switch_color_line(self, obj_line_bounds):
         for i_ in range(len(self.lines)):
@@ -243,11 +246,11 @@ class CountCrossLine(Interface):
             elif self.count_cross[i_] == 2:
                 obj_line_bounds.rgb[i_] = (0, 200, 200)
             elif self.count_cross[i_] == 3:
-                obj_line_bounds.rgb[i_] = (0, 255, 255)
+                obj_line_bounds.rgb[i_] = (0, 255, 255)  # light green
             elif self.done_cross[i_]:
-                obj_line_bounds.rgb[i_] = (0, 255, 0)
+                obj_line_bounds.rgb[i_] = (0, 255, 0)  # green
             else:
-                obj_line_bounds.rgb[i_] = (0, 0, 255)
+                obj_line_bounds.rgb[i_] = (0, 0, 255)  # red
 
     def update(self):
         self.count_cross = [0 for _ in range(len(self.lines))]
@@ -298,7 +301,7 @@ if __name__ == "__main__":
     file_statistic = FileStatistic()
     video_statistic = VideoStatistic(camera)
     line_bounds = LineBounds(camera)
-    count_cross_line = CountCrossLine()
+    count_cross_line = CountCrossLine(line_bounds)
 
     foreground_bg = cv2.createBackgroundSubtractorMOG2(
         history=interface.history,
@@ -311,7 +314,7 @@ if __name__ == "__main__":
     file_statistic.set_index()
     video_statistic.set_record()
 
-    line_bounds.create_lines(interface.ratio)
+    line_bounds.create_lines()
 
     while camera.cap.isOpened():
         ret, frame = camera.read()
